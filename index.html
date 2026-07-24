@@ -20,11 +20,13 @@
   body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Malgun Gothic",sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
   .app { 
   width: 100%; 
-  max-width: 1000px; 
+  max-width: 100%; 
   margin: 0 auto; 
   min-height: 100vh; 
   background: var(--bg); 
   position: relative; 
+  box-sizing: border-box;
+  padding: 0 16px; /* 모바일에서 좌우 끝에 텍스트가 딱 붙지 않게 여백 추가 */
 }
   header { padding:20px 20px 14px; background:var(--panel); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10; }
   h1 { font-size:17px; margin:0 0 6px; font-weight:800; }
