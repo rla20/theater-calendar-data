@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>대학로 연극·뮤지컬 캘린더</title>
+</head>
+<body>
+<script>
+(function () {
+  var css = `
+  :root {
+    --bg: #f7f7f8; --panel: #ffffff; --border: #e6e6e9; --text: #1a1a1e;
+    --text-muted: #6b6b73; --accent: #3d5afe; --play: #3d5afe; --play-bg: #edf0ff;
+    --musical: #8b3dff; --musical-bg: #f4edff;
+    --chip-active-bg: #1a1a1e; --chip-active-text: #ffffff;
+    --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04);
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Malgun Gothic",sans-serif; background:var(--bg); color:var(--text); line-height:1.5; }
+  .app { max-width: 720px; margin:0 auto; min-height:100vh; background:var(--bg); position:relative; }
+  header { padding:20px 20px 14px; background:var(--panel); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10; }
+  h1 { font-size:17px; margin:0 0 6px; font-weight:800; }
+  .sub-title { font-size:12.5px; color:var(--text-muted); line-height:1.6; margin-bottom:12px; }
+
+  .chip-group { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  .chip { border:1px solid var(--border); background:var(--panel); color:var(--text-muted); padding:6px 12px; border-radius:999px; font-size:12.5px; cursor:pointer; white-space:nowrap; transition:all .15s ease; font-weight:500; }
+  .chip:hover { border-color:#bbb; }
+  .chip.active { background:var(--chip-active-bg); color:var(--chip-active-text); border-color:var(--chip-active-bg); }
+  .disclaimer-small { font-size:11px; color:#bbb; margin:-2px 0 8px; line-height:1.5; }
+  .subregion-row { margin:-2px 0 8px 0; padding-left:8px; border-left:2px solid var(--border); }
+  .subregion-row .chip { font-size:11.5px; padding:4px 10px; }
+
+  .day-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
+  .day-tab { border:1px solid var(--border); background:var(--panel); color:var(--text-muted); padding:7px 12px; border-radius:999px; font-size:12.5px; cursor:pointer; font-weight:600; }
+  .day-tab.active { background:var(--text); color:#fff; border-color:var(--text); }
+  .day-tab .cnt { opacity:.7; margin-left:3px; }
+  .result-count { padding:10px 20px 4px; font-size:12.5px; color:var(--text-muted); }
+
+  main { padding:4px 20px 100px; }
+  .warn-banner { margin:12px 0 16px; background:#fff4e5; border:1px solid #ffd699; color:#8a5a00; font-size:12.5px; padding:12px 14px; border-radius:10px; line-height:1.6; }
+  .warn-banner b { display:block; margin-bottom:4px; }
+
+  .time-block { margin-top:22px; }
+  .time-block:first-child { margin-top:12px; }
+  .time-header { display:flex; align-items:baseline; gap:8px; margin-bottom:8px; padding-bottom:6px; border-bottom:2px solid var(--text); }
+  .time-header .time { font-size:18px; font-weight:800; letter-spacing:-0.3px; }
+  .time-header .count { font-size:12.5px; color:var(--text-muted); font-weight:500; }
+  .show-list { display:flex; flex-direction:column; }
+  .show-row { display:flex; align-items:center; gap:10px; padding:10px 4px; border-bottom:1px solid var(--border); cursor:pointer; transition:background .1s ease; }
+  .show-row:hover { background:#fafafa; }
+  .show-row:last-child { border-bottom:none; }
+  .show-thumb { width:44px; height:58px; border-radius:6px; object-fit:cover; flex-shrink:0; background:#e6e6e9; }
+  .genre-badge { flex-shrink:0; font-size:11px; font-weight:700; padding:3px 7px; border-radius:5px; }
+  .genre-badge.play { color:var(--play); background:var(--play-bg); }
+  .genre-badge.musical { color:var(--musical); background:var(--musical-bg); }
+  .flag-badge { flex-shrink:0; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:5px; color:#b3541e; background:#ffedd9; }
+  .show-info { flex:1; min-width:0; }
+  .show-title { font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .show-venue { font-size:12px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+  .show-price { flex-shrink:0; font-size:12.5px; color:var(--text-muted); font-weight:500; }
+  .chevron { flex-shrink:0; color:#ccc; font-size:14px; }
+
+  .source-tag { display:inline-block; font-size:10px; font-weight:700; color:#7a5b00; background:#fff8e1; padding:2px 6px; border-radius:4px; margin-left:6px; vertical-align:middle; }
+  .source-tag.ok { color:#0a6b3d; background:#e6f7ee; }
+  .source-tag.miss { color:#8a2b2b; background:#ffe9e9; }
+
+  .overlay { position:fixed; inset:0; background:rgba(0,0,0,0.35); opacity:0; pointer-events:none; transition:opacity .2s ease; z-index:20; }
+  .overlay.open { opacity:1; pointer-events:auto; }
+  .detail-panel { position:fixed; top:0; right:-440px; width:100%; max-width:440px; height:100%; background:var(--panel); box-shadow:-8px 0 24px rgba(0,0,0,0.12); transition:right .25s cubic-bezier(.2,.8,.2,1); z-index:21; overflow-y:auto; }
+  .detail-panel.open { right:0; }
+  .detail-close { position:absolute; top:16px; right:16px; width:32px; height:32px; border-radius:50%; border:none; background:#f0f0f2; font-size:16px; cursor:pointer; color:var(--text-muted); z-index:2; }
+  .detail-poster { height:220px; background:linear-gradient(135deg,#ddd,#eee); display:flex; align-items:center; justify-content:center; color:#999; font-size:13px; overflow:hidden; }
+  .detail-poster img { width:100%; height:100%; object-fit:cover; display:block; }
+  .detail-body { padding:20px; }
+  .detail-body.no-poster { padding-top:56px; }
+  .detail-title { font-size:19px; font-weight:800; margin:0 0 4px; }
+  .detail-venue { font-size:13.5px; color:var(--text-muted); margin-bottom:16px; }
+  .detail-section { margin-bottom:18px; }
+  .detail-label { font-size:11.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.4px; margin-bottom:7px; }
+  .detail-value { font-size:14px; }
+  .credit-grid { display:grid; grid-template-columns:64px 1fr; row-gap:6px; font-size:13.5px; }
+  .credit-grid dt { color:var(--text-muted); } .credit-grid dd { margin:0; font-weight:600; }
+  .credit-clickable { cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px; }
+  .credit-clickable:hover { color:var(--accent); }
+  .cast-tags { display:flex; flex-wrap:wrap; gap:6px; }
+  .cast-tag { background:#f0f0f2; padding:5px 10px; border-radius:6px; font-size:12.5px; font-weight:600; }
+  .discount-list { list-style:none; padding:0; margin:0; font-size:13px; }
+  .discount-list li { padding:7px 0; border-bottom:1px solid var(--border); }
+  .discount-list li:last-child { border-bottom:none; }
+  .price-line { font-size:15px; font-weight:800; margin-bottom:4px; }
+  .waterfall-note { font-size:11px; color:#999; margin-top:8px; line-height:1.6; }
+  .ticket-link { display:inline-flex; align-items:center; gap:5px; border:1px solid var(--border); border-radius:999px; padding:8px 14px; font-size:12.5px; font-weight:700; color:var(--text); text-decoration:none; background:var(--panel); margin-top:4px; }
+  .ticket-link:hover { border-color:var(--accent); color:var(--accent); }
+  .note-banner { margin:20px 20px 0; background:#fff8e1; border:1px solid #ffe58f; color:#7a5b00; font-size:12px; padding:10px 12px; border-radius:8px; }
+
+  /* 배역별 실캐스팅 (인터파크 실데이터 확보된 공연만) */
+  .role-block { margin-bottom:12px; } .role-block:last-child{ margin-bottom:0; }
+  .role-name { font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:6px; }
+  .actor-chips { display:flex; flex-wrap:wrap; gap:10px; }
+  .actor-chip { display:flex; align-items:center; gap:7px; cursor:pointer; padding:4px 8px 4px 4px; border-radius:20px; transition:background .12s ease; }
+  .actor-chip:hover { background:#f0f0f2; }
+  .actor-avatar-img { width:34px; height:34px; border-radius:50%; object-fit:cover; flex-shrink:0; background:#eee; }
+  .actor-name { font-size:13px; font-weight:600; }
+  .actor-role-label { font-size:11px; color:var(--text-muted); display:block; }
+  .back-btn { display:flex; align-items:center; gap:4px; border:none; background:none; color:var(--text-muted); font-size:13px; font-weight:600; cursor:pointer; padding:0; margin-bottom:14px; }
+  .back-btn:hover { color:var(--text); }
+  .actor-profile-header { display:flex; align-items:center; gap:14px; margin-bottom:18px; }
+  .actor-avatar-lg { width:64px; height:64px; border-radius:50%; object-fit:cover; flex-shrink:0; background:#eee; }
+  .actor-profile-name { font-size:18px; font-weight:800; }
+  .actor-profile-role { font-size:12.5px; color:var(--text-muted); margin-top:2px; }
+  .prev-work-item { display:flex; flex-direction:column; padding:9px 0; border-bottom:1px solid var(--border); font-size:13.5px; text-decoration:none; color:var(--text); }
+  .prev-work-item .venue-year { color:var(--text-muted); font-size:12px; margin-top:2px; }
+  .external-link-pill { display:inline-flex; align-items:center; gap:4px; border:1px solid var(--border); border-radius:999px; padding:8px 14px; font-size:12.5px; font-weight:700; color:var(--text); text-decoration:none; background:var(--panel); margin-top:8px; }
+  .external-link-pill:hover { border-color:var(--accent); color:var(--accent); }
+  `;
+  var styleEl = document.createElement('style');
+  styleEl.textContent = css;
+  document.head.appendChild(styleEl);
+})();
+</script>
+
+<div class="app">
+  <header>
+    <h1>대학로 연극·뮤지컬 캘린더</h1>
+    <div class="sub-title">불러오는 중... · <span id="waterfallSummary"></span>
+    <br>※ NOL은 현재 인터파크와 같은 사이트(tickets.interpark.com)라 지금은 별도로 검색하지 않지만, 추후 실제로 분리되면 바로 별도 단계로 켤 수 있도록 코드 안에 자리(VENDOR_WATERFALL)를 미리 마련해뒀습니다.</div>
+    <div class="chip-group" id="genreChips"></div>
+    <div class="chip-group" id="themeChips"></div>
+    <div class="disclaimer-small">⚠ 테마(코미디/로맨스 등) 분류는 KOPIS가 제공하지 않는 항목입니다. 실제로 확인된 테마가 있는 공연만 칩으로 노출됩니다 (없는 걸 추측으로 채우지 않습니다).</div>
+    <div class="chip-group" id="regionChips"></div>
+    <div class="chip-group subregion-row" id="subregionChips" style="display:none;"></div>
+    <div class="day-tabs" id="dayTabs"></div>
+  </header>
+  <div class="result-count" id="resultCount"></div>
+  <main id="main"></main>
+</div>
+
+<div class="overlay" id="overlay" onclick="closeDetail()"></div>
+<div class="detail-panel" id="detailPanel">
+  <button class="detail-close" onclick="closeDetail()">✕</button>
+  <div id="detailContent"></div>
+</div>
+
+<script>
+// ===========================================================================
+// 실데이터 테스트 세트 — 2026-07-22 기준 KOPIS 오픈API + Chrome으로 직접 조회한
+// 실제 값입니다 (가상 데이터 아님). 대학로 후보 5건을 표본으로 선정해
+// 확정된 우선순위(KOPIS 기준 → ①인터파크/NOL ②티켓링크 ③예스24 ④네이버 ⑤구글)로
+// 가격·할인·캐스팅 정보를 채웠습니다. (각 공연 priceSource.note는 실제 조사 당시
+// 순서를 그대로 남긴 기록이라, 일부는 이전 버전의 조사 경로가 남아있을 수 있습니다.)
+// ===========================================================================
+// ===========================================================================
+// SHOWS는 더 이상 하드코딩하지 않고 GitHub에 올라온 Colab 결과(JSON)를 fetch해서 채운다.
+// 스키마는 claude_템플릿_최신본 기준(id/title/venue/period/cast/crew/company/
+// companyPrevWorks/daehakroFlag/priceSource/discounts/ticketUrl/vendorComparison/realCast)과 동일.
+// ===========================================================================
+var GITHUB_OWNER = "rla20";
+var GITHUB_REPO = "theater-calendar-data";
+var GITHUB_BRANCH = "main";
+var RAW_BASE = "https://raw.githubusercontent.com/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/" + GITHUB_BRANCH;
+var JSON_URL = RAW_BASE + "/data/real_test_week_latest.json?v=" + Date.now();
+
+let SHOWS = [];
+let WEEK_START = null; // 이번 주 월요일 Date 객체 (표시용 날짜 계산 기준)
+
+const WEEKDAY_KEYS = ['mon','tue','wed','thu','fri','sat','sun'];
+const WEEKDAY_LABELS = { mon:'월', tue:'화', wed:'수', thu:'목', fri:'금', sat:'토', sun:'일' };
+
+function mondayOf(dateObj) {
+  const d = new Date(dateObj);
+  const day = d.getDay(); // 0=일 ... 6=토
+  const diff = (day === 0 ? -6 : 1 - day);
+  d.setDate(d.getDate() + diff);
+  d.setHours(0,0,0,0);
+  return d;
+}
+
+function guessWeekStart(shows) {
+  const label = shows.find(s => s.week_label)?.week_label;
+  if (label) return mondayOf(new Date(label));
+  return mondayOf(new Date());
+}
+
+function buildDays(weekStart) {
+  return WEEKDAY_KEYS.map((key, i) => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    return { key, label: `${WEEKDAY_LABELS[key]} ${d.getMonth()+1}/${d.getDate()}` };
+  });
+}
+
+function todayKeyWithin(weekStart) {
+  const diffDays = Math.floor((new Date().setHours(0,0,0,0) - weekStart.getTime()) / 86400000);
+  return (diffDays >= 0 && diffDays <= 6) ? WEEKDAY_KEYS[diffDays] : WEEKDAY_KEYS[0];
+}
+
+
+// 예매처 우선순위 waterfall을 데이터로 관리 — 지금은 NOL이 인터파크와 사실상 같은 사이트(같은 백엔드)라
+// 별도로 검색하지 않고 인터파크 하나만 확인하지만, 추후 NOL이 인터파크에서 실제로 분리되면
+// status만 'active'로 바꿔서 별도 단계로 켤 수 있도록 미리 자리를 마련해둔 것입니다.
+// (지금 당장 두 곳을 다 검색하라는 게 아니라, "나중에 분리됐을 때 검색 순서에 자연스럽게 끼워넣을 수 있는 구조"를 만들어둔 것)
+const VENDOR_WATERFALL = [
+  { key: 'kopis',      label: 'KOPIS 오픈API', status: 'active',  role: '기준 데이터' },
+  { key: 'interpark',  label: '인터파크',       status: 'active',  role: '1순위 (현재 NOL과 동일 사이트라 이 단계에서 같이 확인)' },
+  { key: 'nol',        label: 'NOL',           status: 'pending_split', role: '인터파크에서 분리 예정 — 분리되면 별도 1.5순위로 전환' },
+  { key: 'ticketlink', label: '티켓링크',       status: 'active',  role: '2순위' },
+  { key: 'yes24',      label: '예스24',         status: 'active',  role: '3순위' },
+  { key: 'naver',      label: '네이버',         status: 'active',  role: '4순위 — 다른 예매처의 예매정보·배우정보를 검색으로 교차 확인' },
+  { key: 'google',     label: '구글',           status: 'active',  role: '5순위 — 최종 확인' }
+];
+
+function waterfallSummaryHtml() {
+  const steps = VENDOR_WATERFALL.filter(v => v.status === 'active' && v.key !== 'kopis');
+  const nums = ['①','②','③','④','⑤','⑥','⑦'];
+  const stepsText = steps.map((v, i) => `${nums[i]} ${v.label}`).join(' → ');
+  const pending = VENDOR_WATERFALL.filter(v => v.status === 'pending_split');
+  const pendingText = pending.length
+    ? ` <span style="color:#999;">(${pending.map(p => `${p.label}: ${p.role}`).join(', ')})</span>`
+    : '';
+  return `KOPIS 오픈API를 기준 데이터로 삼고, 예매처는 ${stepsText} 순서로 가격·할인·캐스팅을 보강합니다.${pendingText}`;
+}
+
+// 지역 분류: 코드화된 taxonomy 대신 Colab이 실제로 채울 수 있는 필드만 사용.
+// daehakroFlag(Y/N)로 "대학로/그 외"를 우선 나누고, 세부 지역은 KOPIS의 area 원문 텍스트로 동적 생성.
+function buildRegionOptions(shows) {
+  const areas = Array.from(new Set(shows.map(s => s.region).filter(Boolean)));
+  return areas.sort();
+}
+
+// 테마는 KOPIS가 제공하지 않아 Colab이 항상 null로 둠 -> 실제 값이 있는 것만 칩으로 노출 (§3 원칙)
+function buildThemeOptions(shows) {
+  return Array.from(new Set(shows.map(s => s.theme).filter(Boolean))).sort();
+}
+
+let DAYS = [];
+let activeDay = 'mon';
+let activeGenre = 'all';
+let activeTheme = 'all';
+let activeRegion = 'all';       // 'all' | 'daehakro' | 'other'
+let activeSubregion = 'all';    // area 원문 텍스트 값 하나
+
+function matchesFilters(s) {
+  if (activeGenre !== 'all' && s.genre !== activeGenre) return false;
+  if (activeTheme !== 'all' && s.theme !== activeTheme) return false;
+  if (activeRegion === 'daehakro' && s.daehakroFlag !== 'Y') return false;
+  if (activeRegion === 'other' && s.daehakroFlag === 'Y') return false;
+  if (activeSubregion !== 'all' && s.region !== activeSubregion) return false;
+  return true;
+}
+
+function dayCount(dayKey) {
+  return SHOWS.filter(matchesFilters).filter(s => s.days && s.days[dayKey] && s.days[dayKey].length).length;
+}
+
+function renderGenreChips() {
+  const genres = Array.from(new Set(SHOWS.map(s => s.genre).filter(Boolean)));
+  document.getElementById('genreChips').innerHTML =
+    `<div class="chip${activeGenre==='all'?' active':''}" data-genre="all">전체 장르</div>` +
+    genres.map(g => `<div class="chip${activeGenre===g?' active':''}" data-genre="${g}">${g}</div>`).join('');
+}
+
+function renderThemeChips() {
+  const themes = buildThemeOptions(SHOWS);
+  const el = document.getElementById('themeChips');
+  if (!themes.length) { el.style.display = 'none'; el.innerHTML = ''; return; } // §3: 없으면 칩 자체를 안 만듦
+  el.style.display = 'flex';
+  el.innerHTML = `<div class="chip${activeTheme==='all'?' active':''}" data-theme="all">전체 테마</div>` +
+    themes.map(t => `<div class="chip${activeTheme===t?' active':''}" data-theme="${t}">${t}</div>`).join('');
+}
+
+function renderRegionChips() {
+  const top = document.getElementById('regionChips');
+  top.innerHTML = `
+    <div class="chip${activeRegion==='all'?' active':''}" data-region="all">전체</div>
+    <div class="chip${activeRegion==='daehakro'?' active':''}" data-region="daehakro">🎭 대학로</div>
+    <div class="chip${activeRegion==='other'?' active':''}" data-region="other">그 외</div>
+  `;
+
+  const subContainer = document.getElementById('subregionChips');
+  const areas = buildRegionOptions(SHOWS.filter(matchesFilters));
+  if (areas.length > 1) {
+    subContainer.style.display = 'flex';
+    subContainer.innerHTML = `<div class="chip${activeSubregion==='all'?' active':''}" data-subregion="all">세부지역 전체</div>` +
+      areas.map(a => `<div class="chip${activeSubregion===a?' active':''}" data-subregion="${a}">${a}</div>`).join('');
+  } else {
+    subContainer.style.display = 'none';
+    subContainer.innerHTML = '';
+  }
+}
+
+function renderTabs() {
+  const el = document.getElementById('dayTabs');
+  el.innerHTML = DAYS.map(d => `
+    <div class="day-tab${activeDay===d.key?' active':''}" data-day="${d.key}">${d.label}<span class="cnt">(${dayCount(d.key)})</span></div>
+  `).join('');
+}
+
+function groupByTime(shows, dayKey) {
+  const map = {};
+  shows.forEach(s => {
+    (s.days[dayKey] || []).forEach(t => {
+      if (!map[t]) map[t] = [];
+      map[t].push(s);
+    });
+  });
+  return Object.keys(map).sort().map(t => ({ time: t, shows: map[t] }));
+}
+
+function showRowHtml(s) {
+  const flag = s.daehakroFlag === 'N' ? `<span class="flag-badge">⚠</span>` : '';
+  const genreCls = s.genre === 'musical' ? 'musical' : 'play';
+  const genreLabel = s.genre === 'musical' ? '뮤지컬' : '연극';
+  const thumb = s.poster ? `<img class="show-thumb" src="${s.poster}" alt="${s.title} 포스터" onerror="this.style.display='none'">` : '';
+  return `
+  <div class="show-row" data-id="${s.id}">
+    ${thumb}
+    <div class="show-info">
+      <div class="card-top" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px;">
+        <span class="genre-badge ${genreCls}">${genreLabel}</span>${flag}
+      </div>
+      <div class="show-title">${s.title}</div>
+      <div class="show-venue">${s.venue}</div>
+    </div>
+    <div class="show-price">${s.price}</div>
+    <span class="chevron">›</span>
+  </div>`;
+}
+
+function emptyStateHtml() {
+  let msg;
+  if (activeTheme !== 'all') {
+    msg = '선택한 테마로 분류된 공연이 아직 없습니다. (KOPIS가 테마를 제공하지 않아, 확인된 것만 표시합니다)';
+  } else if (activeGenre !== 'all') {
+    msg = `현재 데이터에 "${activeGenre}" 장르로 이 조건에 맞는 공연이 없습니다.`;
+  } else if (activeRegion !== 'all') {
+    msg = '선택한 지역 조건에 맞는 공연이 없습니다.';
+  } else {
+    msg = '해당 요일·조건에 상연하는 공연이 없습니다.';
+  }
+  return `<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:40px 20px;line-height:1.7;">${msg}</div>`;
+}
+
+function render() {
+  renderGenreChips();
+  renderThemeChips();
+  renderRegionChips();
+  renderTabs();
+
+  const main = document.getElementById('main');
+  const filtered = SHOWS.filter(matchesFilters);
+  const todays = filtered.filter(s => s.days && s.days[activeDay] && s.days[activeDay].length);
+  const noDaysCount = filtered.filter(s => !s.days).length;
+
+  document.getElementById('resultCount').textContent = `이 조건에 해당하는 공연 ${todays.length}건 (전체 ${SHOWS.length}건 중)`;
+
+  let html = '';
+  if (noDaysCount > 0) {
+    html += `<div class="warn-banner"><b>⚠ 요일별 시간표를 못 읽은 공연 ${noDaysCount}건</b>
+    KOPIS의 시간 안내 문구 형식이 다양해서 자동으로 요일별 시간표를 못 만든 공연은 요일 탭에 안 나타납니다.
+    상세 정보 자체는 있으니, 필요하면 Claude에게 해당 공연만 짚어서 시간표를 채워달라고 하면 됩니다.</div>`;
+  }
+
+  if (!todays.length) {
+    html += emptyStateHtml();
+  } else {
+    const blocks = groupByTime(todays, activeDay);
+    html += blocks.map(b => `
+      <div class="time-block">
+        <div class="time-header"><span class="time">${b.time}</span><span class="count">${b.shows.length}건</span></div>
+        <div class="show-list">${b.shows.map(showRowHtml).join('')}</div>
+      </div>
+    `).join('');
+  }
+  main.innerHTML = html;
+
+  main.querySelectorAll('.show-row').forEach(el => {
+    el.addEventListener('click', () => openDetail(el.dataset.id));
+  });
+}
+
+function findShow(id) { return SHOWS.find(s => s.id === id); }
+
+let currentShowId = null;
+
+// "전석 40,000원" 같은 문자열에서 기준가(정가)만 뽑아냄 — 할인율 적용 시 실결제가 계산용
+function basePriceOf(s) {
+  const m = s.price.match(/([\d,]+)\s*원/);
+  return m ? parseInt(m[1].replace(/,/g, ''), 10) : null;
+}
+
+// 할인 항목 한 줄을 좌측정렬 + 실제 할인가(원)까지 계산해서 렌더링
+function discountLineHtml(text, basePrice) {
+  const m = text.match(/(\d+)\s*%/);
+  const pct = m ? parseInt(m[1], 10) : null;
+  const priceHtml = (pct != null && basePrice)
+    ? `<span style="flex-shrink:0;font-weight:800;color:#0a8f4c;white-space:nowrap;margin-left:10px;">${Math.round(basePrice * (1 - pct/100)).toLocaleString()}원</span>`
+    : '';
+  return `<li style="display:flex;justify-content:space-between;align-items:baseline;text-align:left;">
+    <span style="text-align:left;">${text}</span>${priceHtml}
+  </li>`;
+}
+
+// 배역별 실캐스팅 렌더링 (인터파크 실데이터 확보된 공연만 — 없으면 openDetail에서 이 함수 자체를 안 부름)
+function avatarSmallHtml(rc) {
+  const dot = rc.photo_verified === false ? '<span style="position:absolute;bottom:0;right:0;width:9px;height:9px;border-radius:50%;background:#ff9f0a;border:2px solid #fff;"></span>' : '';
+  const wrap = html => `<span style="position:relative;display:inline-block;">${html}${dot}</span>`;
+  return rc.photo
+    ? wrap(`<img class="actor-avatar-img" src="${rc.photo}" alt="${rc.actor}" onerror="this.outerHTML='<div class=&quot;actor-avatar-img&quot; style=&quot;width:34px;height:34px;background:linear-gradient(135deg,#d8dcff,#eee0ff);color:#6a5acd;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;&quot;>${rc.actor.slice(-2)}</div>'">`)
+    : wrap(`<div class="actor-avatar-img" style="width:34px;height:34px;background:linear-gradient(135deg,#d8dcff,#eee0ff);color:#6a5acd;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;">${rc.actor.slice(-2)}</div>`);
+}
+
+function realCastHtml(realCast) {
+  // 같은 배역을 여러 배우가 맡으면(멀티/더블/트리플 캐스팅) 한 role-block에 묶어서 보여주고,
+  // 배우 한 명이 여러 배역을 겸하는 경우(예: 나잇나잇)는 각자 자기 배역 라벨을 달고 개별 표시함
+  const groups = [];
+  realCast.forEach(rc => {
+    const roleKey = (rc.roles && rc.roles.length) ? rc.roles.join('|') : `__solo__${rc.actor}`;
+    let g = groups.find(g => g.roleKey === roleKey);
+    if (!g) { g = { roleKey, roles: rc.roles, items: [] }; groups.push(g); }
+    g.items.push(rc);
+  });
+  return groups.map(g => `
+    <div class="role-block">
+      ${(g.roles && g.roles.length && g.items.length > 1) ? `<div class="role-name">${g.roles.join(', ')} 역 <span style="font-weight:500;color:#999;">(멀티캐스팅 ${g.items.length}명)</span></div>` : ''}
+      <div class="actor-chips">
+        ${g.items.map(rc => `
+          <div class="actor-chip" data-actor="${rc.actor}">
+            ${avatarSmallHtml(rc)}
+            <div>
+              <span class="actor-name">${rc.actor}</span>
+              ${(g.items.length === 1 && rc.roles && rc.roles.length) ? `<span class="actor-role-label">${rc.roles.join(', ')} 역</span>` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function openDetail(id) {
+  currentShowId = id;
+  const s = findShow(id);
+  const sourceClass = s.priceSource.status === 'ok' ? 'ok' : (s.priceSource.status === 'miss' ? 'miss' : '');
+
+  const posterHtml = s.poster ? `<div class="detail-poster"><img src="${s.poster}" alt="${s.title} 포스터" onerror="this.outerHTML='<div style=&quot;color:#999;font-size:12px;text-align:center;padding:12px;&quot;>⚠ 포스터 이미지를 불러오지 못했습니다 (네트워크에서 KOPIS 이미지 서버 접속이 막혔을 수 있습니다)<br><a href=&quot;${s.poster}&quot; target=&quot;_blank&quot; style=&quot;color:var(--accent);&quot;>원본 이미지 링크 열기</a></div>'"></div>` : '';
+
+  const flagBlock = s.flagIssue ? `
+    <div class="detail-section">
+      <div class="warn-banner" style="margin:0;">⚠ ${s.flagIssue}</div>
+    </div>` : '';
+
+  const basePrice = basePriceOf(s);
+  const discountBlock = s.vendorComparison ? `
+    <div class="detail-section">
+      <div class="detail-label">할인 정보 — 예매처별 비교 <span class="source-tag ok">${s.vendorComparison.checked.length}개 사이트에서 확인됨</span></div>
+      ${s.vendorComparison.checked.map(v => `
+        <div style="margin-bottom:10px;">
+          <div style="font-size:12.5px;font-weight:700;">
+            ${v.site}
+            <span class="source-tag ok">${v.discounts.length}종</span>
+            <a href="${v.url}" target="_blank" rel="noopener" style="font-size:11px;font-weight:700;color:var(--accent);text-decoration:none;margin-left:6px;">예매 링크 →</a>
+          </div>
+          <ul class="discount-list" style="margin-top:4px;">${v.discounts.map(d => discountLineHtml(d, basePrice)).join('')}</ul>
+        </div>
+      `).join('')}
+      <div class="warn-banner" style="margin-top:8px;">⚠ ${s.vendorComparison.note}</div>
+    </div>
+  ` : (s.discounts.length ? `
+    <div class="detail-section">
+      <div class="detail-label">할인 정보 <span class="source-tag ${sourceClass}">${s.priceSource.site} 조회</span></div>
+      <ul class="discount-list">${s.discounts.map(d => discountLineHtml(d, basePrice)).join('')}</ul>
+    </div>` : `
+    <div class="detail-section">
+      <div class="detail-label">할인 정보 <span class="source-tag">${s.priceSource.site} 조회</span></div>
+      <div class="detail-value" style="color:var(--text-muted);font-size:13px;">현재 진행 중인 할인 프로모션을 찾지 못했습니다.</div>
+    </div>`);
+
+  // 캐스트 섹션: Colab이 채운 realCast(사진 후보)가 있으면 그걸 우선 사용, 없으면 KOPIS flat 목록으로 대체
+  const hasCast = s.realCast && s.realCast.length > 0;
+  const hasRoles = hasCast && s.realCast.some(rc => rc.roles && rc.roles.length);
+  const hasProfileLinks = hasCast && s.realCast.some(rc => rc.profileUrl);
+  const verifiedCount = hasCast ? s.realCast.filter(rc => rc.photo_verified).length : 0;
+  const castSourceLabel = verifiedCount === (s.realCast || []).length && hasCast ? 'KOPIS 교차확인 완료' : `${verifiedCount}/${(s.realCast||[]).length}명만 검증됨`;
+  const castNoteText = hasProfileLinks
+    ? `배우 사진·이름을 클릭하면 프로필 화면으로 이동합니다.${hasRoles ? '' : ' 이 공연은 배역 라벨이 따로 없어 사진·이름만 표시했습니다.'}`
+    : '🟠 주황 점이 있는 배우는 이름만으로 찾은 미검증 후보 사진입니다 (동명이인일 수 있음). 사진·이름을 클릭하면 검증 상태를 볼 수 있습니다.';
+  const castBlock = hasCast ? `
+      <div class="detail-section" style="margin-top:18px;">
+        <div class="detail-label">${hasRoles ? '출연진 (배역별)' : '출연진 (사진 후보)'} <span class="source-tag ${verifiedCount===s.realCast.length?'ok':''}">${castSourceLabel}</span></div>
+        ${realCastHtml(s.realCast)}
+        <div class="waterfall-note">${castNoteText}</div>
+        ${s.castChangeNotice ? `<div class="warn-banner" style="margin-top:10px;">📢 ${s.castChangeNotice}</div>` : ''}
+        ${s.castMismatchNote ? `<div class="warn-banner" style="margin-top:10px;">⚠ ${s.castMismatchNote}</div>` : ''}
+      </div>
+  ` : `
+      <div class="detail-section" style="margin-top:18px;">
+        <div class="detail-label">출연진 <span class="source-tag miss">배우 사진 추가 불가</span></div>
+        <div class="cast-tags">${(s.cast||[]).map(c => `<span class="cast-tag">${c}</span>`).join('')}</div>
+        <div class="warn-banner" style="margin-top:10px;">❌ 배우 사진을 확인했지만 추가하지 못했습니다. KOPIS의 출연진 이름만 배역 구분 없이 텍스트로 표시합니다.</div>
+      </div>`;
+
+  document.getElementById('detailContent').innerHTML = `
+    ${posterHtml}
+    <div class="detail-body${posterHtml ? '' : ' no-poster'}">
+      <span class="genre-badge ${s.genre==='musical'?'musical':'play'}">${s.genre==='musical'?'뮤지컬':'연극'}</span>${s.theme ? `<span class="genre-badge" style="background:#fff2e2;color:#c2620a;margin-left:6px;">#${s.theme}</span>` : ''}
+      <h2 class="detail-title" style="margin-top:8px;">${s.title}</h2>
+      <div class="detail-venue">${s.venue} · ${s.period}</div>
+      ${s.themeNote ? `<div class="waterfall-note" style="margin-top:-8px;margin-bottom:14px;">${s.themeNote}</div>` : ''}
+      ${flagBlock}
+      <div class="detail-section">
+        <div class="detail-label">공연 시간표 <span class="source-tag ok">KOPIS 기본정보</span></div>
+        <div class="detail-value">${s.dtguidance}</div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-label">러닝타임 <span class="source-tag ok">KOPIS 기본정보</span></div>
+        <div class="detail-value">${s.runtime}</div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-label">제작진 <span class="source-tag ok">KOPIS 기본정보</span></div>
+        <dl class="credit-grid">
+          <dt>제작사</dt><dd>${s.companyPrevWorks ? `<span class="credit-clickable" data-company="1">${s.company}</span>` : s.company}</dd>
+          <dt>스태프</dt><dd>${s.crew.map(name => (s.crewInfo && s.crewInfo[name]) ? `<span class="credit-clickable" data-crew="${name}">${name}</span>` : name).join(', ')}</dd>
+        </dl>
+        <div class="waterfall-note">※ KOPIS의 prfcrew 필드는 작가/연출 구분 없이 이름만 나열되어 있어, 이번 표본에서는 역할 구분 없이 통째로 표시했습니다. ${s.companyPrevWorks ? '제작사 이름을 클릭하면 이 회사의 다른 작품을 볼 수 있고, ' : ''}${s.crewInfo ? '밑줄 있는 스태프 이름을 클릭하면 전작이 확인된 경우에 한해 정보가 보입니다.' : ''}</div>
+        ${s.crewNote ? `<div class="warn-banner" style="margin-top:10px;">⚠ ${s.crewNote}</div>` : ''}
+      </div>
+      <div class="detail-section">
+        <div class="detail-label">가격 <span class="source-tag ok">KOPIS 기본정보</span></div>
+        <div class="price-line">${s.price}</div>
+      </div>
+      ${discountBlock}
+      <div class="waterfall-note">조회 경로: ${s.priceSource.note}</div>
+      ${!s.vendorComparison ? `<a class="ticket-link" href="${s.ticketUrl}" target="_blank" rel="noopener">예매처 바로가기 →</a>` : ''}
+      ${castBlock}
+    </div>
+  `;
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('detailPanel').classList.add('open');
+
+  if (s.realCast) {
+    document.querySelectorAll('.actor-chip').forEach(el => {
+      el.addEventListener('click', () => {
+        const rc = s.realCast.find(r => r.actor === el.dataset.actor);
+        openActorProfile(rc);
+      });
+    });
+  }
+  const companyEl = document.querySelector('.credit-clickable[data-company]');
+  if (companyEl) {
+    companyEl.addEventListener('click', () => openPersonProfile(s.companyPrevWorks.name, s.companyPrevWorks));
+  }
+  document.querySelectorAll('.credit-clickable[data-crew]').forEach(el => {
+    el.addEventListener('click', () => openPersonProfile(el.dataset.crew, s.crewInfo[el.dataset.crew]));
+  });
+}
+
+// 제작사·스태프 이름 클릭 시 나오는 전작 화면 (배우 프로필과 같은 back-btn 패턴 재사용)
+function openPersonProfile(name, info) {
+  const worksSection = (info.works && info.works.length) ? `
+      <div class="detail-section">
+        <div class="detail-label">전작 <span class="source-tag ok">${info.source || 'KOPIS 인물 검색'}</span></div>
+        ${info.works.map(w => `
+          <div class="prev-work-item">
+            <span>${w.title}</span>
+            <span class="venue-year">${w.venue} · ${w.period}</span>
+          </div>
+        `).join('')}
+      </div>
+  ` : `
+      <div class="detail-section">
+        <div class="detail-value" style="color:var(--text-muted);font-size:13px;">확인된 다른 작품이 없습니다.</div>
+      </div>
+  `;
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-body">
+      <button class="back-btn" id="backToShow">‹ 공연 정보로</button>
+      <div class="actor-profile-header">
+        <div class="actor-avatar-lg" style="display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#d8dcff,#eee0ff);color:#6a5acd;font-size:18px;font-weight:800;">${name.slice(-2)}</div>
+        <div><div class="actor-profile-name">${name}</div></div>
+      </div>
+      ${worksSection}
+      ${info.note ? `<div class="waterfall-note">${info.note}</div>` : ''}
+    </div>
+  `;
+  document.getElementById('backToShow').addEventListener('click', () => openDetail(currentShowId));
+}
+
+function openActorProfile(rc) {
+  const worksSection = (rc.works && rc.works.length) ? `
+      <div class="detail-section">
+        <div class="detail-label">최근 출연작 <span class="source-tag ok">인터파크 실데이터</span></div>
+        ${rc.works.map(w => `
+          <div class="prev-work-item">
+            <span>${w.title}${w.role ? ' · ' + w.role : ''}</span>
+            <span class="venue-year">${w.venue ? w.venue + ' · ' : ''}${w.period}</span>
+          </div>
+        `).join('')}
+      </div>
+  ` : '';
+
+  const metaSection = rc.profileMeta ? `
+      <div class="detail-section">
+        <div class="detail-label">프로필 <span class="source-tag ok">인터파크 실데이터</span></div>
+        <dl class="credit-grid">
+          <dt>직업</dt><dd>${rc.profileMeta.job}</dd>
+          <dt>소속</dt><dd>${rc.profileMeta.affiliation}</dd>
+        </dl>
+      </div>
+  ` : '';
+
+  const avatarLgHtml = rc.photo
+    ? `<img class="actor-avatar-lg" src="${rc.photo}" alt="${rc.actor}" onerror="this.outerHTML='<div class=&quot;actor-avatar-lg&quot; style=&quot;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#d8dcff,#eee0ff);color:#6a5acd;font-size:18px;font-weight:800;&quot;>${rc.actor.slice(-2)}</div>'">`
+    : `<div class="actor-avatar-lg" style="display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#d8dcff,#eee0ff);color:#6a5acd;font-size:18px;font-weight:800;">${rc.actor.slice(-2)}</div>`;
+
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-body">
+      <button class="back-btn" id="backToShow">‹ 공연 정보로</button>
+      <div class="actor-profile-header">
+        ${avatarLgHtml}
+        <div>
+          <div class="actor-profile-name">${rc.actor}</div>
+          ${rc.roles && rc.roles.length ? `<div class="actor-profile-role">이번 공연 배역: ${rc.roles.join(', ')}</div>` : ''}
+        </div>
+      </div>
+      ${metaSection}
+      ${worksSection}
+      ${rc.profileUrl ? `<a class="external-link-pill" href="${rc.profileUrl}" target="_blank" rel="noopener">예매처에서 배우 프로필 전체 보기 →</a>` : ''}
+      ${!rc.profileUrl ? '<div class="waterfall-note">이 배우는 예매처 페이지에 실제 사진은 있었지만, 별도 프로필 페이지(고유 URL)는 없어 사진·이름만 확보했습니다.</div>' : (!rc.works ? '<div class="waterfall-note">이 배우는 이번 표본에서 프로필 상세까지는 확인하지 않았고, 캐스팅 섹션의 실제 클릭 링크(위 버튼)만 확보했습니다.</div>' : '')}
+    </div>
+  `;
+  document.getElementById('backToShow').addEventListener('click', () => openDetail(currentShowId));
+}
+
+function closeDetail() {
+  document.getElementById('overlay').classList.remove('open');
+  document.getElementById('detailPanel').classList.remove('open');
+}
+
+document.getElementById('genreChips').addEventListener('click', e => {
+  const chip = e.target.closest('.chip'); if (!chip) return;
+  activeGenre = chip.dataset.genre; render();
+});
+document.getElementById('themeChips').addEventListener('click', e => {
+  const chip = e.target.closest('.chip'); if (!chip) return;
+  activeTheme = chip.dataset.theme; render();
+});
+document.getElementById('regionChips').addEventListener('click', e => {
+  const chip = e.target.closest('.chip'); if (!chip) return;
+  activeRegion = chip.dataset.region; activeSubregion = 'all'; render();
+});
+document.getElementById('subregionChips').addEventListener('click', e => {
+  const chip = e.target.closest('.chip'); if (!chip) return;
+  activeSubregion = chip.dataset.subregion; render();
+});
+document.getElementById('dayTabs').addEventListener('click', e => {
+  const tab = e.target.closest('.day-tab'); if (!tab) return;
+  activeDay = tab.dataset.day; render();
+});
+
+document.getElementById('waterfallSummary').innerHTML = waterfallSummaryHtml();
+
+// ============================================================
+// 데이터 fetch: GitHub JSON을 불러온 뒤에야 요일/필터/화면을 초기화
+// ============================================================
+document.getElementById('main').innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:60px 20px;">공연 데이터를 불러오는 중...</div>';
+
+fetch(JSON_URL)
+  .then(res => { if (!res.ok) throw new Error('JSON 로드 실패: ' + res.status); return res.json(); })
+  .then(shows => {
+    shows.forEach(s => {
+      if (s.poster && !s.poster.startsWith('http')) s.poster = RAW_BASE + '/' + s.poster;
+      (s.realCast || []).forEach(a => {
+        if (a.photo && !a.photo.startsWith('http')) a.photo = RAW_BASE + '/' + a.photo;
+      });
+    });
+    SHOWS = shows;
+    WEEK_START = guessWeekStart(shows);
+    DAYS = buildDays(WEEK_START);
+    activeDay = todayKeyWithin(WEEK_START);
+    document.querySelector('.sub-title').innerHTML =
+      `${DAYS[0].label} ~ ${DAYS[6].label} · <span id="waterfallSummary">${waterfallSummaryHtml()}</span>`;
+    render();
+  })
+  .catch(err => {
+    document.getElementById('main').innerHTML =
+      `<div style="text-align:center;color:#c62828;padding:60px 20px;">데이터를 불러오지 못했습니다: ${err.message}<br><br>GITHUB_OWNER/REPO 설정과 data/real_test_week_latest.json 경로를 확인하세요.</div>`;
+  });
+</script>
+
+<div class="note-banner">
+  ✅ 이 화면은 Colab이 KOPIS 오픈API로 수집하고 GitHub에 올린 실데이터를 그대로 불러옵니다.
+  배우 사진 검증(<code>actors_auto_verified</code>)과 예매처 할인 비교(<code>vendorComparison</code>)가 아직 안 된 공연은
+  상세 화면에 "확인 불가"로 정직하게 표시됩니다 — 없는 정보를 추측으로 채우지 않습니다.
+</div>
+
+</body>
+</html>
