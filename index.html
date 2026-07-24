@@ -218,14 +218,7 @@ const VENDOR_WATERFALL = [
 ];
 
 function waterfallSummaryHtml() {
-  const steps = VENDOR_WATERFALL.filter(v => v.status === 'active' && v.key !== 'kopis');
-  const nums = ['①','②','③','④','⑤','⑥','⑦'];
-  const stepsText = steps.map((v, i) => `${nums[i]} ${v.label}`).join(' → ');
-  const pending = VENDOR_WATERFALL.filter(v => v.status === 'pending_split');
-  const pendingText = pending.length
-    ? ` <span style="color:#999;">(${pending.map(p => `${p.label}: ${p.role}`).join(', ')})</span>`
-    : '';
-  return `KOPIS 오픈API를 기준 데이터로 삼고, 예매처는 ${stepsText} 순서로 가격·할인·캐스팅을 보강합니다.${pendingText}`;
+  return `KOPIS 오픈API를 기준 데이터;
 }
 
 // 지역 분류: 코드화된 taxonomy 대신 Colab이 실제로 채울 수 있는 필드만 사용.
