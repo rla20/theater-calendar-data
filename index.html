@@ -39,7 +39,7 @@
       ".card-title { font-size:15px; font-weight:700; margin:4px 0 2px 0; }" +
       ".card-venue { font-size:12px; color:#86868b; }" +
       ".badge-blue { background:#e8f0fe; color:#1a73e8; font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px; display:inline-block; margin-bottom:4px; }" +
-      ".detail-pane { width:420px; background:#fff; border-left:1px solid #d2d2d7; height:100vh; overflow-y:auto; padding:24px; position:relative; box-shadow: -4px 0 16px rgba(0,0,0,0.05); }" +
+      ".detail-pane { width:420px; background:#fff; border-left:1px solid #d2d2d7; height:100vh; overflow-y:auto; padding:24px; position:relative; box-shadow: -4px 0 16px rgba(0,0,0,0.05); flex-shrink:0; }" +
       ".close-btn { position:absolute; top:20px; right:20px; width:32px; height:32px; border-radius:50%; background:#f2f2f7; border:none; cursor:pointer; font-weight:bold; z-index:10; }" +
       ".detail-poster { width:100%; height:280px; object-fit:cover; border-radius:12px; margin-bottom:16px; background:#e5e5ea; }" +
       ".detail-title { font-size:20px; font-weight:800; margin:8px 0 4px 0; }" +
@@ -76,12 +76,6 @@
     function renderApp(shows) {
       var state = { genre: null, region: null, day: null, detail: null };
 
-      // 카드 클릭 시 호출되는 함수 정의 (세부정보 팝업 활성화)
-      window.__openDetail = function (mt20id) {
-        state.detail = shows.find(function (s) { return s.mt20id === mt20id; }) || null;
-        render();
-      };
-
       function render() {
         var filtered = shows.filter(function (s) {
           if (state.genre && s.genrenm !== state.genre) return false;
@@ -98,8 +92,7 @@
         var genres = Array.from(new Set(shows.map(function (s) { return s.genrenm; }).filter(Boolean)));
         var regions = Array.from(new Set(shows.map(function (s) { return s.area; }).filter(Boolean)));
         
-        // 2026년 이후(오늘 날짜 기준)의 상연 일자만 추출하여 2014년 등 과거 날짜 정리
-        var todayStr = new Date().toISOString().slice(0, 10);
+        var todayStr = "2026-07-24";
         var datesSet = new Set();
         shows.forEach(function (s) {
           if (s.prfpdfrom) {
@@ -125,7 +118,7 @@
         regions.forEach(function (r) { html += chip(r, state.region === r, 'region', r); });
         html += '</div>';
 
-        // 날짜 탭 (2026년 오늘 날짜 이후만 출력)
+        // 날짜 탭
         html += '<div class="date-scroll-container">';
         html += dateTab('전체', state.day === null, '');
         dates.forEach(function (d) { html += dateTab(d, state.day === d, 'day', d); });
@@ -137,7 +130,7 @@
         } else {
           html += '<div>';
           filtered.forEach(function (s) {
-            html += '<div class="show-card" onclick="window.__openDetail(\'' + s.mt20id + '\')">';
+            html += '<div class="show-card" data-show-id="' + s.mt20id + '">';
             html += '<img src="' + (s.poster || '') + '" alt="">';
             html += '<div>';
             html += '<span class="badge-blue">' + escapeHtml(s.genrenm || '공연') + '</span>';
@@ -149,7 +142,7 @@
         }
         html += '</div>';
 
-        // 상세 패널
+        // 상세 패널 (우측)
         if (state.detail) {
           html += renderDetail(state.detail);
         }
@@ -162,6 +155,15 @@
             var type = btn.getAttribute('data-type');
             var val = btn.getAttribute('data-val') || null;
             state[type] = val;
+            render();
+          });
+        });
+
+        // 카드 직접 클릭 이벤트 바인딩 (이벤트 리스너 방식)
+        root.querySelectorAll('.show-card').forEach(function (card) {
+          card.addEventListener('click', function () {
+            var showId = card.getAttribute('data-show-id');
+            state.detail = shows.find(function (s) { return s.mt20id === showId; }) || null;
             render();
           });
         });
