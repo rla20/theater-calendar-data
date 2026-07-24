@@ -16,11 +16,11 @@
     var JSON_URL = RAW_BASE + "/data/shows_latest.json";
 
     var VENDOR_WATERFALL = [
-      { id: "interpark", name: "인터파크", status: "active" },
-      { id: "nolticket", name: "NOL티켓", status: "active" },
-      { id: "ticketlink", name: "티켓링크", status: "active" },
-      { id: "yes24", name: "예스24", status: "active" },
-      { id: "naver", name: "네이버", status: "active" }
+      { id: "interpark", name: "인터파크" },
+      { id: "nolticket", name: "NOL티켓" },
+      { id: "ticketlink", name: "티켓링크" },
+      { id: "yes24", name: "예스24" },
+      { id: "naver", name: "네이버" }
     ];
 
     var css = 
@@ -76,6 +76,12 @@
     function renderApp(shows) {
       var state = { genre: null, region: null, day: null, detail: null };
 
+      // 카드 클릭 시 호출되는 함수 정의 (세부정보 팝업 활성화)
+      window.__openDetail = function (mt20id) {
+        state.detail = shows.find(function (s) { return s.mt20id === mt20id; }) || null;
+        render();
+      };
+
       function render() {
         var filtered = shows.filter(function (s) {
           if (state.genre && s.genrenm !== state.genre) return false;
@@ -92,16 +98,20 @@
         var genres = Array.from(new Set(shows.map(function (s) { return s.genrenm; }).filter(Boolean)));
         var regions = Array.from(new Set(shows.map(function (s) { return s.area; }).filter(Boolean)));
         
-        // 날짜 목록 추출 및 정렬
+        // 2026년 이후(오늘 날짜 기준)의 상연 일자만 추출하여 2014년 등 과거 날짜 정리
+        var todayStr = new Date().toISOString().slice(0, 10);
         var datesSet = new Set();
         shows.forEach(function (s) {
-          if (s.prfpdfrom) datesSet.add(s.prfpdfrom.replace(/\./g, '-'));
+          if (s.prfpdfrom) {
+            var d = s.prfpdfrom.replace(/\./g, '-');
+            if (d >= todayStr) datesSet.add(d);
+          }
         });
         var dates = Array.from(datesSet).sort();
 
         var html = '<div class="main-container">';
         html += '<h2>대학로 연극·뮤지컬 캘린더</h2>';
-        html += '<div class="sub-desc">총 ' + shows.length + '건 중 ' + filtered.length + '건 표시 | 예매처 우선순위: 인터파크 → NOL티켓 → 티켓링크 → 예스24 → 네이버</div>';
+        html += '<div class="sub-desc">총 ' + shows.length + '건 중 ' + filtered.length + '건 표시</div>';
 
         // 장르 필터
         html += '<div class="filter-group">';
@@ -115,13 +125,13 @@
         regions.forEach(function (r) { html += chip(r, state.region === r, 'region', r); });
         html += '</div>';
 
-        // 날짜 탭
+        // 날짜 탭 (2026년 오늘 날짜 이후만 출력)
         html += '<div class="date-scroll-container">';
         html += dateTab('전체', state.day === null, '');
         dates.forEach(function (d) { html += dateTab(d, state.day === d, 'day', d); });
         html += '</div>';
 
-        // 공연 목록 Cards
+        // 공연 목록
         if (filtered.length === 0) {
           html += '<div class="empty-msg">조건에 맞는 공연이 없습니다.</div>';
         } else {
@@ -139,14 +149,14 @@
         }
         html += '</div>';
 
-        // 상세 패널 (우측)
+        // 상세 패널
         if (state.detail) {
           html += renderDetail(state.detail);
         }
 
         root.innerHTML = html;
 
-        // 필터/날짜 클릭 이벤트 바인딩
+        // 필터/날짜 클릭 이벤트
         root.querySelectorAll('[data-filter]').forEach(function (btn) {
           btn.addEventListener('click', function () {
             var type = btn.getAttribute('data-type');
@@ -185,30 +195,24 @@
         html += '<div class="section-label">시간·러닝타임</div>';
         html += '<div class="info-box">' + escapeHtml(s.dtguidance || '정보 없음') + (s.prfruntime ? ' · ' + escapeHtml(s.prfruntime) : '') + '</div>';
         
-        html += '<div class="section-label">제작진 / 출연진</div>';
+        html += '<div class="section-label">출연진 / 제작진</div>';
         html += '<div class="info-box">' + escapeHtml(s.prfcast || '정보 없음') + '</div>';
 
         html += '<div class="section-label">가격 정보</div>';
         html += '<div class="info-box">' + escapeHtml(s.pcseguidance || '정보 없음') + '</div>';
 
         html += '<div class="section-label">예매처 바로가기</div>';
-        VENDOR_WATERFALL.filter(function (v) { return v.status === 'active'; }).forEach(function (v) {
+        VENDOR_WATERFALL.forEach(function (v) {
           html += '<a class="vendor-btn" href="#" target="_blank">' + v.name + '에서 예매</a>';
         });
 
         if (s.needs_manual_review) {
-          html += '<div class="warn-banner">⚠️ 일부 정보(배우 프로필/전작, 예매처 할인 비교)는 아직 확인되지 않았습니다.</div>';
+          html += '<div class="warn-banner">⚠️ 일부 정보는 추가 확인이 필요합니다.</div>';
         }
 
         html += '</div>';
         return html;
       }
-
-      // 카드 클릭 시 호출되는 전역 함수 등록 (클릭 이벤트 복구)
-      window.__openDetail = function (mt20id) {
-        state.detail = shows.find(function (s) { return s.mt20id === mt20id; }) || null;
-        render();
-      };
 
       render();
     }
