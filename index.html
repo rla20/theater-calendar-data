@@ -15,14 +15,6 @@
     var RAW_BASE = "https://raw.githubusercontent.com/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/" + GITHUB_BRANCH;
     var JSON_URL = RAW_BASE + "/data/shows_latest.json";
 
-    var VENDOR_WATERFALL = [
-      { id: "interpark", name: "인터파크" },
-      { id: "nolticket", name: "NOL티켓" },
-      { id: "ticketlink", name: "티켓링크" },
-      { id: "yes24", name: "예스24" },
-      { id: "naver", name: "네이버" }
-    ];
-
     var css = 
       "* { box-sizing: border-box; }" +
       "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:#f5f5f7; color:#1d1d1f; margin:0; padding:0; display:flex; height:100vh; overflow:hidden; }" +
@@ -35,18 +27,18 @@
       ".btn-tag.active, .date-tab.active { background:#000; color:#fff; }" +
       ".show-card { background:#fff; border-radius:12px; padding:12px 16px; margin-bottom:12px; display:flex; align-items:center; gap:16px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.04); transition:transform 0.1s; }" +
       ".show-card:hover { transform: translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,0.08); }" +
-      ".show-card img { width:50px; height:66px; object-fit:cover; border-radius:6px; background:#e5e5ea; }" +
+      ".show-card img { width:50px; height:66px; object-fit:cover; border-radius:6px; background:#e5e5ea; pointer-events:none; }" +
+      ".show-card * { pointer-events:none; }" + // 카드 내부 클릭 시 버블링 방지
       ".card-title { font-size:15px; font-weight:700; margin:4px 0 2px 0; }" +
       ".card-venue { font-size:12px; color:#86868b; }" +
       ".badge-blue { background:#e8f0fe; color:#1a73e8; font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px; display:inline-block; margin-bottom:4px; }" +
+      ".badge-gray { background:#f2f2f7; color:#555; font-size:11px; font-weight:600; padding:2px 6px; border-radius:4px; display:inline-block; margin-bottom:4px; margin-left:4px; }" +
       ".detail-pane { width:420px; background:#fff; border-left:1px solid #d2d2d7; height:100vh; overflow-y:auto; padding:24px; position:relative; box-shadow: -4px 0 16px rgba(0,0,0,0.05); flex-shrink:0; }" +
       ".close-btn { position:absolute; top:20px; right:20px; width:32px; height:32px; border-radius:50%; background:#f2f2f7; border:none; cursor:pointer; font-weight:bold; z-index:10; }" +
       ".detail-poster { width:100%; height:280px; object-fit:cover; border-radius:12px; margin-bottom:16px; background:#e5e5ea; }" +
       ".detail-title { font-size:20px; font-weight:800; margin:8px 0 4px 0; }" +
       ".section-label { font-size:12px; font-weight:700; color:#86868b; margin-top:16px; margin-bottom:6px; text-transform:uppercase; }" +
       ".info-box { background:#f9f9fb; padding:12px; border-radius:10px; font-size:13px; line-height:1.6; border:1px solid #f0f0f2; }" +
-      ".vendor-btn { display:inline-block; background:#0071e3; color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-size:13px; font-weight:600; margin-right:6px; margin-bottom:6px; }" +
-      ".warn-banner { background:#fff9e6; border:1px solid #ffe58f; color:#873800; padding:10px 12px; border-radius:8px; font-size:12px; margin-top:12px; }" +
       ".empty-msg { padding:40px; text-align:center; color:#86868b; font-size:14px; }";
 
     var styleEl = document.createElement("style");
@@ -66,20 +58,56 @@
           if (s.poster && !s.poster.startsWith("http")) {
             s.poster = RAW_BASE + "/" + s.poster;
           }
+          // 대학로 여부 판별 속성 추가
+          var venue = s.fcltynm || "";
+          s.isDaehakro = (s.area === "대학로") || venue.includes("대학로") || venue.includes("혜화");
         });
-        renderApp(shows);
+        initApp(shows);
       })
       .catch(function (err) {
         root.innerHTML = '<div class="main-container"><div class="empty-msg">데이터 로드 실패: ' + err.message + '</div></div>';
       });
 
-    function renderApp(shows) {
-      var state = { genre: null, region: null, day: null, detail: null };
+    function initApp(shows) {
+      var state = { genre: null, region: 'daehakro', day: null, detail: null };
+
+      // 최상위 이벤트 위임 (클릭이 안 씹히게 고침)
+      root.addEventListener('click', function (e) {
+        // 1. 카드 클릭
+        var card = e.target.closest('.show-card');
+        if (card) {
+          var showId = card.getAttribute('data-show-id');
+          state.detail = shows.find(function (s) { return s.mt20id === showId; }) || null;
+          render();
+          return;
+        }
+
+        // 2. 닫기 버튼
+        if (e.target.classList.contains('close-btn')) {
+          state.detail = null;
+          render();
+          return;
+        }
+
+        // 3. 필터/날짜 버튼
+        var filterBtn = e.target.closest('[data-filter]');
+        if (filterBtn) {
+          var type = filterBtn.getAttribute('data-type');
+          var val = filterBtn.getAttribute('data-val') || null;
+          state[type] = val;
+          render();
+          return;
+        }
+      });
 
       function render() {
         var filtered = shows.filter(function (s) {
           if (state.genre && s.genrenm !== state.genre) return false;
-          if (state.region && s.area !== state.region) return false;
+          
+          // 대학로 / 기타 서울 / 전체 필터링
+          if (state.region === 'daehakro' && !s.isDaehakro) return false;
+          if (state.region === 'other' && s.isDaehakro) return false;
+
           if (state.day) {
             var dFrom = (s.prfpdfrom || '').replace(/\./g, '-');
             var dTo = (s.prfpdto || '').replace(/\./g, '-');
@@ -90,7 +118,6 @@
         });
 
         var genres = Array.from(new Set(shows.map(function (s) { return s.genrenm; }).filter(Boolean)));
-        var regions = Array.from(new Set(shows.map(function (s) { return s.area; }).filter(Boolean)));
         
         var todayStr = "2026-07-24";
         var datesSet = new Set();
@@ -106,21 +133,22 @@
         html += '<h2>대학로 연극·뮤지컬 캘린더</h2>';
         html += '<div class="sub-desc">총 ' + shows.length + '건 중 ' + filtered.length + '건 표시</div>';
 
+        // 지역 구분 탭 (대학로 vs 기타 서울)
+        html += '<div class="filter-group">';
+        html += chip('🎭 대학로 공연', state.region === 'daehakro', 'region', 'daehakro');
+        html += chip('🏛️ 기타 서울 지역', state.region === 'other', 'region', 'other');
+        html += chip('전체 보기', state.region === null, 'region', '');
+        html += '</div>';
+
         // 장르 필터
         html += '<div class="filter-group">';
         html += chip('전체 장르', state.genre === null, 'genre', '');
         genres.forEach(function (g) { html += chip(g, state.genre === g, 'genre', g); });
         html += '</div>';
 
-        // 지역 필터
-        html += '<div class="filter-group">';
-        html += chip('전체 지역', state.region === null, 'region', '');
-        regions.forEach(function (r) { html += chip(r, state.region === r, 'region', r); });
-        html += '</div>';
-
         // 날짜 탭
         html += '<div class="date-scroll-container">';
-        html += dateTab('전체', state.day === null, '');
+        html += dateTab('전체 날짜', state.day === null, '');
         dates.forEach(function (d) { html += dateTab(d, state.day === d, 'day', d); });
         html += '</div>';
 
@@ -134,6 +162,7 @@
             html += '<img src="' + (s.poster || '') + '" alt="">';
             html += '<div>';
             html += '<span class="badge-blue">' + escapeHtml(s.genrenm || '공연') + '</span>';
+            if(s.isDaehakro) html += '<span class="badge-gray">대학로</span>';
             html += '<div class="card-title">' + escapeHtml(s.prfnm) + '</div>';
             html += '<div class="card-venue">' + escapeHtml(s.fcltynm || '') + ' (' + escapeHtml(s.prfpdfrom || '') + ' ~ ' + escapeHtml(s.prfpdto || '') + ')</div>';
             html += '</div></div>';
@@ -142,40 +171,12 @@
         }
         html += '</div>';
 
-        // 상세 패널 (우측)
+        // 우측 상세 패널
         if (state.detail) {
           html += renderDetail(state.detail);
         }
 
         root.innerHTML = html;
-
-        // 필터/날짜 클릭 이벤트
-        root.querySelectorAll('[data-filter]').forEach(function (btn) {
-          btn.addEventListener('click', function () {
-            var type = btn.getAttribute('data-type');
-            var val = btn.getAttribute('data-val') || null;
-            state[type] = val;
-            render();
-          });
-        });
-
-        // 카드 직접 클릭 이벤트 바인딩 (이벤트 리스너 방식)
-        root.querySelectorAll('.show-card').forEach(function (card) {
-          card.addEventListener('click', function () {
-            var showId = card.getAttribute('data-show-id');
-            state.detail = shows.find(function (s) { return s.mt20id === showId; }) || null;
-            render();
-          });
-        });
-
-        // 닫기 버튼
-        var closeBtn = root.querySelector('.close-btn');
-        if (closeBtn) {
-          closeBtn.addEventListener('click', function () {
-            state.detail = null;
-            render();
-          });
-        }
       }
 
       function chip(label, active, type, val) {
@@ -202,15 +203,6 @@
 
         html += '<div class="section-label">가격 정보</div>';
         html += '<div class="info-box">' + escapeHtml(s.pcseguidance || '정보 없음') + '</div>';
-
-        html += '<div class="section-label">예매처 바로가기</div>';
-        VENDOR_WATERFALL.forEach(function (v) {
-          html += '<a class="vendor-btn" href="#" target="_blank">' + v.name + '에서 예매</a>';
-        });
-
-        if (s.needs_manual_review) {
-          html += '<div class="warn-banner">⚠️ 일부 정보는 추가 확인이 필요합니다.</div>';
-        }
 
         html += '</div>';
         return html;
