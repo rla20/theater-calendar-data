@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>대학로 연극·뮤지컬 캘린더</title>
+</head>
+<body>
+<div id="app-root"></div>
+<script>
+(function () {
+  // ============================================================
+  // 설정: 이 부분만 본인 GitHub 저장소로 바꾸면 됩니다.
+  // ============================================================
+  var GITHUB_OWNER = "YOUR_GITHUB_USERNAME";
+  var GITHUB_REPO = "theater-calendar-data";
+  var GITHUB_BRANCH = "main";
+  var RAW_BASE = "https://raw.githubusercontent.com/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/" + GITHUB_BRANCH;
+  var JSON_URL = RAW_BASE + "/data/shows_latest.json";
+
+  var VENDOR_WATERFALL = [
+    { name: "인터파크", status: "pending_split" },
+    { name: "NOL티켓", status: "pending_split" },
+    { name: "티켓링크", status: "active" },
+    { name: "예스24", status: "active" },
+    { name: "네이버", status: "active" }
+  ];
+
+  // ============================================================
+  // 스타일 (Colab이 생성한 shows_latest.json 하나만 갱신하면
+  // 이 HTML 파일 자체는 손댈 필요 없음)
+  // ============================================================
+  var css = ""
+    + "* { box-sizing: border-box; }"
+    + "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:#f5f5f7; color:#1d1d1f; margin:0; padding:0; display:flex; height:100vh; overflow:hidden; }"
+    + ".main-container { flex:1; padding:24px 32px; overflow-y:auto; height:100vh; }"
+    + "h2 { font-size:22px; font-weight:700; margin:0 0 6px 0; }"
+    + ".sub-desc { font-size:13px; color:#6e6e73; margin-bottom:16px; }"
+    + ".vendor-note { font-size:12px; color:#6e6e73; margin-bottom:16px; }"
+    + ".filter-group { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }"
+    + ".btn-tag { background:#e5e5ea; color:#1d1d1f; border:none; padding:6px 14px; border-radius:20px; font-size:13px; font-weight:500; cursor:pointer; }"
+    + ".btn-tag.active { background:#000; color:#fff; }"
+    + ".date-tabs { display:flex; gap:8px; margin:16px 0 24px 0; overflow-x:auto; padding-bottom:4px; }"
+    + ".date-tab { background:#e5e5ea; border-radius:10px; padding:10px 18px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }"
+    + ".date-tab.active { background:#0071e3; color:#fff; }"
+    + ".time-section { margin-top:20px; }"
+    + ".time-title { font-size:16px; font-weight:700; margin-bottom:12px; border-bottom:2px solid #1d1d1f; padding-bottom:6px; }"
+    + ".show-card { background:#fff; border-radius:12px; padding:12px 16px; margin-bottom:12px; display:flex; align-items:center; gap:16px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.04); }"
+    + ".show-card img { width:50px; height:66px; object-fit:cover; border-radius:6px; background:#e5e5ea; }"
+    + ".card-title { font-size:15px; font-weight:700; margin:4px 0 2px 0; }"
+    + ".card-venue { font-size:12px; color:#86868b; }"
+    + ".badge-blue { background:#e8f0fe; color:#1a73e8; font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px; }"
+    + ".detail-pane { width:440px; background:#fff; border-left:1px solid #d2d2d7; height:100vh; overflow-y:auto; padding:24px; position:relative; }"
+    + ".close-btn { position:absolute; top:20px; right:20px; width:32px; height:32px; border-radius:50%; background:#f2f2f7; border:none; cursor:pointer; }"
+    + ".detail-poster { width:100%; height:240px; object-fit:cover; border-radius:12px; margin-bottom:16px; background:#e5e5ea; }"
+    + ".detail-title { font-size:20px; font-weight:800; margin:0 0 4px 0; }"
+    + ".section-label { font-size:13px; font-weight:700; margin:16px 0 8px 0; }"
+    + ".info-box { background:#f9f9fb; padding:12px; border-radius:10px; font-size:13px; line-height:1.6; }"
+    + ".warn-banner { background:#fff4e5; color:#b25400; border-radius:8px; padding:10px 12px; font-size:12px; margin:10px 0; }"
+    + ".vendor-btn { display:block; text-align:center; padding:10px; border-radius:8px; background:#0071e3; color:#fff; text-decoration:none; font-size:13px; font-weight:600; margin-bottom:8px; }"
+    + ".empty-msg { padding:40px; text-align:center; color:#86868b; font-size:14px; }"
+    + ".loading-msg { padding:40px; text-align:center; color:#86868b; }";
+  var styleEl = document.createElement("style");
+  styleEl.textContent = css;
+  document.head.appendChild(styleEl);
+
+  var root = document.getElementById("app-root");
+  root.innerHTML = '<div class="main-container"><div class="loading-msg">공연 데이터를 불러오는 중...</div></div>';
+
+  // ============================================================
+  // 데이터 fetch: GitHub raw JSON + 이미지도 전부 GitHub URL 참조
+  // (base64 임베드가 없어서 이 HTML 파일 자체는 몇 KB밖에 안 됨)
+  // ============================================================
+  fetch(JSON_URL)
+    .then(function (res) {
+      if (!res.ok) throw new Error("JSON 로드 실패: " + res.status);
+      return res.json();
+    })
+    .then(function (shows) {
+      shows.forEach(function (s) {
+        if (s.poster && !s.poster.startsWith("http")) {
+          s.poster = RAW_BASE + "/" + s.poster; // 상대경로 -> GitHub raw 절대 URL
+        }
+      });
+      renderApp(shows);
+    })
+    .catch(function (err) {
+      root.innerHTML = '<div class="main-container"><div class="empty-msg">데이터를 불러오지 못했습니다: '
+        + err.message + '<br><br>GITHUB_OWNER / GITHUB_REPO 설정을 확인하세요.</div></div>';
+    });
+
+  // ============================================================
+  // 렌더링 로직
+  // ============================================================
+  function renderApp(shows) {
+    var state = { genre: null, region: null, day: null, detail: null };
+
+    function uniq(arr) { return arr.filter(function (v, i) { return arr.indexOf(v) === i; }); }
+
+    function filtered() {
+      return shows.filter(function (s) {
+        if (state.genre && s.genrenm !== state.genre) return false;
+        if (state.region && s.area !== state.region) return false;
+        if (state.day && !(s.prfpdfrom <= state.day && state.day <= s.prfpdto)) return false;
+        return true;
+      });
+    }
+
+    function render() {
+      var genres = uniq(shows.map(function (s) { return s.genrenm; }).filter(Boolean));
+      var regions = uniq(shows.map(function (s) { return s.area; }).filter(Boolean));
+      var days = uniq(shows.map(function (s) { return s.prfpdfrom; }).filter(Boolean)).sort();
+
+      var list = filtered();
+
+      var html = '<div class="main-container">';
+      html += '<h2>대학로 연극·뮤지컬 캘린더</h2>';
+      html += '<div class="sub-desc">총 ' + shows.length + '건 중 ' + list.length + '건 표시</div>';
+      html += '<div class="vendor-note">예매처 우선순위: ' + VENDOR_WATERFALL.map(function (v) { return v.name; }).join(" → ") + '</div>';
+
+      html += '<div class="filter-group">';
+      html += chip("전체 장르", state.genre === null, "genre", null);
+      genres.forEach(function (g) { html += chip(g, state.genre === g, "genre", g); });
+      html += '</div>';
+
+      html += '<div class="filter-group">';
+      html += chip("전체 지역", state.region === null, "region", null);
+      regions.forEach(function (r) { html += chip(r, state.region === r, "region", r); });
+      html += '</div>';
+
+      html += '<div class="date-tabs">';
+      html += dateTab("전체", state.day === null, null);
+      days.forEach(function (d) { html += dateTab(d, state.day === d, d); });
+      html += '</div>';
+
+      if (list.length === 0) {
+        html += '<div class="empty-msg">선택한 조건에 맞는 공연이 없습니다. 필터를 조정해보세요.</div>';
+      } else {
+        html += '<div class="time-section"><div class="time-title">공연 목록</div>';
+        list.forEach(function (s) {
+          html += '<div class="show-card" onclick="window.__openDetail(\'' + s.mt20id + '\')">';
+          html += '<img src="' + (s.poster || '') + '" alt="">';
+          html += '<div class="show-info">';
+          html += '<span class="badge-blue">' + (s.genrenm || '') + '</span>';
+          html += '<div class="card-title">' + escapeHtml(s.prfnm || '') + '</div>';
+          html += '<div class="card-venue">' + escapeHtml(s.fcltynm || '') + '</div>';
+          html += '</div></div>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+
+      if (state.detail) {
+        html += renderDetail(state.detail);
+      }
+
+      root.innerHTML = html;
+
+      root.querySelectorAll('[data-filter]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var type = btn.getAttribute('data-type');
+          var val = btn.getAttribute('data-val') || null;
+          state[type] = val;
+          render();
+        });
+      });
+      var closeBtn = root.querySelector('.close-btn');
+      if (closeBtn) closeBtn.addEventListener('click', function () { state.detail = null; render(); });
+    }
+
+    function chip(label, active, type, val) {
+      return '<button class="btn-tag' + (active ? ' active' : '') + '" data-filter data-type="' + type + '" data-val="' + (val || '') + '">' + escapeHtml(label) + '</button>';
+    }
+    function dateTab(label, active, val) {
+      return '<button class="date-tab' + (active ? ' active' : '') + '" data-filter data-type="day" data-val="' + (val || '') + '">' + escapeHtml(label) + '</button>';
+    }
+
+    function renderDetail(s) {
+      var html = '<div class="detail-pane">';
+      html += '<button class="close-btn">✕</button>';
+      html += '<img class="detail-poster" src="' + (s.poster || '') + '" alt="">';
+      html += '<span class="badge-blue">' + (s.genrenm || '') + '</span>';
+      html += '<div class="detail-title">' + escapeHtml(s.prfnm || '') + '</div>';
+      html += '<div class="card-venue">' + escapeHtml(s.fcltynm || '') + ' · ' + (s.prfpdfrom || '') + ' ~ ' + (s.prfpdto || '') + '</div>';
+
+      html += '<div class="section-label">시간·러닝타임</div>';
+      html += '<div class="info-box">' + escapeHtml(s.dtguidance || '정보 없음') + (s.prfruntime ? ' · ' + escapeHtml(s.prfruntime) : '') + '</div>';
+
+      html += '<div class="section-label">제작진 / 출연진</div>';
+      html += '<div class="info-box">' + escapeHtml(s.prfcast || '정보 없음') + '</div>';
+      if (s.prfcrew) html += '<div class="info-box" style="margin-top:6px;">' + escapeHtml(s.prfcrew) + '</div>';
+
+      html += '<div class="section-label">가격</div>';
+      html += '<div class="info-box">' + escapeHtml(s.pcseguidance || '정보 없음') + '</div>';
+
+      if (s.vendorComparison) {
+        html += '<div class="section-label">예매처별 할인 비교</div>';
+        html += '<div class="info-box">' + escapeHtml(JSON.stringify(s.vendorComparison)) + '</div>';
+      } else {
+        html += '<div class="section-label">예매처 바로가기</div>';
+        VENDOR_WATERFALL.filter(function (v) { return v.status === 'active'; }).forEach(function (v) {
+          html += '<a class="vendor-btn" href="#" target="_blank">' + v.name + '에서 예매</a>';
+        });
+      }
+
+      if (s.needs_manual_review) {
+        html += '<div class="warn-banner">❌ 일부 정보(배우 프로필/전작, 예매처 할인 비교)는 아직 확인되지 않았습니다.</div>';
+      }
+
+      html += '</div>';
+      return html;
+    }
+
+    window.__openDetail = function (mt20id) {
+      state.detail = shows.find(function (s) { return s.mt20id === mt20id; }) || null;
+      render();
+    };
+
+    render();
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+})();
+</script>
+</body>
+</html>
