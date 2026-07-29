@@ -32,9 +32,14 @@
   .subregion-row .chip { font-size:11.5px; padding:4px 10px; }
 
   .day-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
-  .day-tab { border:1px solid var(--border); background:var(--panel); color:var(--text-muted); padding:7px 12px; border-radius:999px; font-size:12.5px; cursor:pointer; font-weight:600; }
+  .day-tab { border:1px solid var(--border); background:var(--panel); color:var(--text-muted); padding:7px 12px; border-radius:16px; font-size:12.5px; cursor:pointer; font-weight:600; box-sizing:border-box; width:100%; }
   .day-tab.active { background:var(--text); color:#fff; border-color:var(--text); }
-  .day-tab .cnt { opacity:.7; margin-left:3px; }
+  .day-tab { display:flex; flex-direction:column; align-items:center; gap:2px; padding:6px 4px; }
+  .day-tab-date { font-size:11px; white-space:nowrap; }
+  .day-tab .cnt { opacity:.6; font-size:10.5px; font-weight:500; margin-left:0; }
+  .month-jump-wrap { position:relative; display:flex; align-items:center; }
+  .month-jump-label { font-weight:800; color:var(--accent); font-size:12.5px; pointer-events:none; }
+  .month-jump-input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; border:none; padding:0; margin:0; }
   .result-count { padding:10px 20px 4px; font-size:12.5px; color:var(--text-muted); }
 
   main { padding:4px 20px 100px; }
@@ -51,6 +56,16 @@
   .show-row:hover { background:#fafafa; }
   .show-row:last-child { border-bottom:none; }
   .show-thumb { width:44px; height:58px; border-radius:6px; object-fit:cover; flex-shrink:0; background:#e6e6e9; }
+  .all-card { display:flex; align-items:center; gap:12px; padding:10px 14px; border:1px solid var(--border); border-radius:12px; background:var(--panel); margin-bottom:8px; cursor:pointer; }
+  .all-card-poster { width:56px; height:74px; border-radius:8px; object-fit:cover; flex-shrink:0; background:#e6e6e9; }
+  .all-card-body { flex:1; min-width:0; }
+  .all-card-status { flex-shrink:0; text-align:right; }
+  .status-badge { display:inline-block; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:700; }
+  .status-badge.status-ongoing { background:#e6f6ea; color:#1b8a3f; }
+  .status-badge.status-upcoming { background:#e8f0fe; color:#1a5fd1; }
+  .status-badge.status-ended { background:#f2f2f5; color:#8a8a92; }
+  .status-badge.status-unknown { background:#fff4e5; color:#b25400; }
+  .all-card-period { font-size:11px; color:var(--text-muted); margin-top:4px; white-space:nowrap; }
   .genre-badge { flex-shrink:0; font-size:11px; font-weight:700; padding:3px 7px; border-radius:5px; }
   .genre-badge.play { color:var(--play); background:var(--play-bg); }
   .genre-badge.musical { color:var(--musical); background:var(--musical-bg); }
@@ -125,11 +140,15 @@
     <h1>대학로 연극·뮤지컬 캘린더</h1>
     <div class="sub-title">불러오는 중... · <span id="waterfallSummary"></span>
     <br>※ NOL은 현재 인터파크와 같은 사이트(tickets.interpark.com)라 지금은 별도로 검색하지 않지만, 추후 실제로 분리되면 바로 별도 단계로 켤 수 있도록 코드 안에 자리(VENDOR_WATERFALL)를 미리 마련해뒀습니다.</div>
-    <div class="chip-group" id="genreChips"></div>
+    <div class="chip-group" style="align-items:center;">
+      <div id="genreChips" style="display:contents;"></div>
+      <input type="text" id="searchBox" placeholder="🔍 제목·출연진·장소 검색" style="border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:12.5px;font-family:inherit;outline:none;width:200px;max-width:100%;" />
+    </div>
     <div class="chip-group" id="themeChips"></div>
     <div class="disclaimer-small">⚠ 테마(코미디/로맨스 등) 분류는 KOPIS가 제공하지 않는 항목입니다. 실제로 확인된 테마가 있는 공연만 칩으로 노출됩니다 (없는 걸 추측으로 채우지 않습니다).</div>
     <div class="chip-group" id="regionChips"></div>
     <div class="chip-group subregion-row" id="subregionChips" style="display:none;"></div>
+    <div class="chip-group" id="viewModeToggle" style="margin-top:2px;"></div>
     <div class="day-tabs" id="dayTabs"></div>
   </header>
   <div class="result-count" id="resultCount"></div>
@@ -158,11 +177,35 @@
 var GITHUB_OWNER = "rla20";
 var GITHUB_REPO = "theater-calendar-data";
 var GITHUB_BRANCH = "main";
-var RAW_BASE = "https://raw.githubusercontent.com/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/" + GITHUB_BRANCH;
-var JSON_URL = RAW_BASE + "/data/real_test_week_latest.json?v=" + Date.now();
+
+// raw.githubusercontent.com이 일부 광고차단기/네트워크 환경에서 막히는 경우가 있어서,
+// 안 되면 자동으로 jsDelivr GitHub 미러로 넘어가도록 이중화. 실제로 성공한 쪽을 ACTIVE_BASE에 저장해서
+// 이미지 경로 등 이후 모든 요청에 동일하게 사용한다.
+var CDN_BASES = [
+  "https://raw.githubusercontent.com/" + GITHUB_OWNER + "/" + GITHUB_REPO + "/" + GITHUB_BRANCH,
+  "https://cdn.jsdelivr.net/gh/" + GITHUB_OWNER + "/" + GITHUB_REPO + "@" + GITHUB_BRANCH
+];
+var RAW_BASE = CDN_BASES[0]; // 이미지 경로 변환 등에서 참조 -> fetch 성공 시 실제 사용된 base로 갱신됨
+
+function fetchJsonWithFallback(path) {
+  let chain = Promise.reject(new Error('start'));
+  CDN_BASES.forEach(base => {
+    chain = chain.catch(() => {
+      const url = base + path + (path.includes('?') ? '&' : '?') + 'v=' + Date.now();
+      return fetch(url).then(res => {
+        if (!res.ok) throw new Error('HTTP ' + res.status + ' (' + base + ')');
+        RAW_BASE = base; // 성공한 base를 이후 이미지 URL 변환에도 그대로 사용
+        return res.json();
+      });
+    });
+  });
+  return chain;
+}
 
 let SHOWS = [];
 let WEEK_START = null; // 이번 주 월요일 Date 객체 (표시용 날짜 계산 기준)
+let LATEST_WEEK_LABEL = null; // 가장 최근 주(오늘 기준 최신) week_label -> 과거 주 판별용
+let CURRENT_WEEK_LABEL = null; // 지금 화면에 로드된 주의 week_label (이전/다음 주 이동 시 갱신)
 
 const WEEKDAY_KEYS = ['mon','tue','wed','thu','fri','sat','sun'];
 const WEEKDAY_LABELS = { mon:'월', tue:'화', wed:'수', thu:'목', fri:'금', sat:'토', sun:'일' };
@@ -186,13 +229,82 @@ function buildDays(weekStart) {
   return WEEKDAY_KEYS.map((key, i) => {
     const d = new Date(weekStart);
     d.setDate(d.getDate() + i);
-    return { key, label: `${WEEKDAY_LABELS[key]} ${d.getMonth()+1}/${d.getDate()}` };
+    return { key, label: `${WEEKDAY_LABELS[key]} ${d.getMonth()+1}/${d.getDate()}`, month: d.getMonth()+1, date: d.getDate(), year: d.getFullYear() };
   });
 }
 
 function todayKeyWithin(weekStart) {
   const diffDays = Math.floor((new Date().setHours(0,0,0,0) - weekStart.getTime()) / 86400000);
   return (diffDays >= 0 && diffDays <= 6) ? WEEKDAY_KEYS[diffDays] : WEEKDAY_KEYS[0];
+}
+
+// ============================================================
+// 주 단위 이전/다음 탐색: 매주 새 JSON이 GitHub에 누적되는 구조를 그대로 활용.
+// data/real_test_week_{YYYY-MM-DD}.json 파일명 규칙을 이용해 원하는 주를 직접 fetch한다.
+// LATEST_WEEK_LABEL은 최초 로드된 "이번 주"로 고정 -> 다른 주를 보면 자동으로 과거 취급됨.
+// ============================================================
+function fmtDate(d) {
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+function loadWeekAt(dateObj) {
+  const targetMonday = mondayOf(dateObj);
+  const targetLabel = fmtDate(targetMonday);
+
+  document.getElementById('main').innerHTML =
+    `<div style="text-align:center;color:var(--text-muted);padding:60px 20px;">${targetLabel} 주 데이터를 불러오는 중...</div>`;
+
+  fetchJsonWithFallback(`/data/real_test_week_${targetLabel}.json`)
+    .then(shows => {
+      shows.forEach(s => {
+        if (s.poster && !s.poster.startsWith('http')) s.poster = RAW_BASE + '/' + s.poster;
+        (s.realCast || []).forEach(a => {
+          if (a.photo && !a.photo.startsWith('http')) a.photo = RAW_BASE + '/' + a.photo;
+        });
+      });
+      applyWeek(shows, targetMonday, targetLabel);
+    })
+    .catch(err => {
+      // 그 주 데이터가 아직 없어도 에러로 막지 않고, 빈 상태(0건)로 요일탭은 그대로 표시.
+      // 데이터는 Colab이 나중에 채우면 자동으로 나타남.
+      console.warn(`${targetLabel} 주 데이터 없음(정상 - 아직 수집 전일 수 있음):`, err.message);
+      applyWeek([], targetMonday, targetLabel);
+    });
+}
+
+function applyWeek(shows, weekStart, weekLabel) {
+  SHOWS = shows;
+  WEEK_START = weekStart;
+  CURRENT_WEEK_LABEL = (shows.find(s => s.week_label) || {}).week_label || weekLabel;
+  DAYS = buildDays(WEEK_START);
+  // 버그 수정 (2026-07-29): 항상 월요일(DAYS[0])로 고정되던 걸 todayKeyWithin으로 변경.
+  // "오늘" 버튼(전체목록에서 돌아올 때 포함)/이전주/다음주/월-점프를 눌러도 로드된 주에
+  // 오늘이 포함돼 있으면 정확히 오늘 요일 탭이 선택되고, 과거/미래 주로 이동한 경우엔
+  // todayKeyWithin이 자동으로 월요일로 폴백한다(요일별.html 최초 로드 시 로직과 동일하게 통일).
+  activeDay = todayKeyWithin(WEEK_START);
+  document.querySelector('.sub-title').innerHTML =
+    `${DAYS[0].label} ~ ${DAYS[6].label} · <span id="waterfallSummary">${waterfallSummaryHtml()}</span>`;
+  render();
+}
+
+function loadWeekForDate(dateObj) {
+  loadWeekAt(new Date(dateObj));
+}
+
+function loadWeek(offsetDays) {
+  const base = WEEK_START || mondayOf(new Date());
+  const target = new Date(base);
+  target.setDate(target.getDate() + offsetDays);
+  loadWeekAt(target);
+}
+
+function loadCurrentWeek() {
+  if (LATEST_WEEK_LABEL) {
+    loadWeekAt(new Date(LATEST_WEEK_LABEL));
+  } else {
+    loadWeekAt(new Date());
+  }
 }
 
 
@@ -236,16 +348,65 @@ function buildThemeOptions(shows) {
 let DAYS = [];
 let activeDay = 'mon';
 let activeGenre = 'all';
+let viewMode = 'week'; // 'week' | 'all'
+let searchQuery = '';
 let activeTheme = 'all';
-let activeRegion = 'all';       // 'all' | 'daehakro' | 'other'
-let activeSubregion = 'all';    // area 원문 텍스트 값 하나
+let activeRegion = 'all';       // REGION_TAXONOMY의 key 또는 'all'
+let activeSubregion = 'all';    // 경기 하위지역 등
+
+// 장르: 데이터에서 뽑지 않고 고정 메뉴 (데이터가 비어있어도 항상 보임)
+const GENRE_TAXONOMY = [
+  { key: 'play', label: '연극' },
+  { key: 'musical', label: '뮤지컬' },
+  { key: 'other', label: '기타공연' }
+];
+
+// 지역: 요일별.html 원본 taxonomy 복원 (전부 고정 메뉴, 데이터 없어도 항상 보임)
+const REGION_TAXONOMY = [
+  { key: 'daehangno', label: '대학로' },
+  { key: 'seoul',      label: '서울(그 외)' },
+  { key: 'busan',      label: '부산' },
+  { key: 'daegu',      label: '대구' },
+  { key: 'incheon',    label: '인천' },
+  { key: 'gwangju',    label: '광주' },
+  { key: 'daejeon',    label: '대전' },
+  { key: 'ulsan',      label: '울산' },
+  { key: 'sejong',     label: '세종' },
+  { key: 'gyeonggi',   label: '경기', subs: [
+      { key: 'gg-buk',  label: '경기북부' },
+      { key: 'gg-dong', label: '경기동부' },
+      { key: 'gg-nam',  label: '경기남부' },
+      { key: 'gg-seo',  label: '경기서부' }
+  ]},
+  { key: 'gangwon',    label: '강원' },
+  { key: 'chungbuk',   label: '충북' },
+  { key: 'chungnam',   label: '충남' },
+  { key: 'jeonbuk',    label: '전북' },
+  { key: 'jeonnam',    label: '전남' },
+  { key: 'gyeongbuk',  label: '경북' },
+  { key: 'gyeongnam',  label: '경남' },
+  { key: 'jeju',       label: '제주' }
+];
 
 function matchesFilters(s) {
-  if (activeGenre !== 'all' && s.genre !== activeGenre) return false;
+  if (activeGenre !== 'all') {
+    if (activeGenre === 'other') {
+      if (s.genre === 'play' || s.genre === 'musical') return false;
+    } else if (s.genre !== activeGenre) {
+      return false;
+    }
+  }
   if (activeTheme !== 'all' && s.theme !== activeTheme) return false;
-  if (activeRegion === 'daehakro' && s.daehakroFlag !== 'Y') return false;
-  if (activeRegion === 'other' && s.daehakroFlag === 'Y') return false;
-  if (activeSubregion !== 'all' && s.region !== activeSubregion) return false;
+  if (activeRegion !== 'all' && s.region !== activeRegion) return false;
+  if (activeRegion !== 'all' && activeSubregion !== 'all' && s.subregion !== activeSubregion) return false;
+  if (searchQuery) {
+    const q = searchQuery;
+    const hit = (s.title || '').toLowerCase().includes(q)
+      || (s.venue || '').toLowerCase().includes(q)
+      || (s.cast || []).some(c => (c || '').toLowerCase().includes(q))
+      || (s.realCast || []).some(a => (a.actor || '').toLowerCase().includes(q));
+    if (!hit) return false;
+  }
   return true;
 }
 
@@ -254,10 +415,16 @@ function dayCount(dayKey) {
 }
 
 function renderGenreChips() {
-  const genres = Array.from(new Set(SHOWS.map(s => s.genre).filter(Boolean)));
   document.getElementById('genreChips').innerHTML =
     `<div class="chip${activeGenre==='all'?' active':''}" data-genre="all">전체 장르</div>` +
-    genres.map(g => `<div class="chip${activeGenre===g?' active':''}" data-genre="${g}">${g}</div>`).join('');
+    GENRE_TAXONOMY.map(g => `<div class="chip${activeGenre===g.key?' active':''}" data-genre="${g.key}">${g.label}</div>`).join('');
+}
+
+function renderViewModeToggle() {
+  document.getElementById('viewModeToggle').innerHTML = `
+    <div class="chip${viewMode==='week'?' active':''}" data-mode="week">📅 요일별</div>
+    <div class="chip${viewMode==='all'?' active':''}" data-mode="all">📋 전체목록</div>
+  `;
 }
 
 function renderThemeChips() {
@@ -271,18 +438,15 @@ function renderThemeChips() {
 
 function renderRegionChips() {
   const top = document.getElementById('regionChips');
-  top.innerHTML = `
-    <div class="chip${activeRegion==='all'?' active':''}" data-region="all">전체</div>
-    <div class="chip${activeRegion==='daehakro'?' active':''}" data-region="daehakro">🎭 대학로</div>
-    <div class="chip${activeRegion==='other'?' active':''}" data-region="other">그 외</div>
-  `;
+  top.innerHTML = `<div class="chip${activeRegion==='all'?' active':''}" data-region="all">전지역</div>` +
+    REGION_TAXONOMY.map(r => `<div class="chip${activeRegion===r.key?' active':''}" data-region="${r.key}">${r.label}</div>`).join('');
 
   const subContainer = document.getElementById('subregionChips');
-  const areas = buildRegionOptions(SHOWS.filter(matchesFilters));
-  if (areas.length > 1) {
+  const activeDef = REGION_TAXONOMY.find(r => r.key === activeRegion);
+  if (activeDef && activeDef.subs) {
     subContainer.style.display = 'flex';
-    subContainer.innerHTML = `<div class="chip${activeSubregion==='all'?' active':''}" data-subregion="all">세부지역 전체</div>` +
-      areas.map(a => `<div class="chip${activeSubregion===a?' active':''}" data-subregion="${a}">${a}</div>`).join('');
+    subContainer.innerHTML = `<div class="chip${activeSubregion==='all'?' active':''}" data-subregion="all">${activeDef.label} 전체</div>` +
+      activeDef.subs.map(s => `<div class="chip${activeSubregion===s.key?' active':''}" data-subregion="${s.key}">${s.label}</div>`).join('');
   } else {
     subContainer.style.display = 'none';
     subContainer.innerHTML = '';
@@ -291,9 +455,46 @@ function renderRegionChips() {
 
 function renderTabs() {
   const el = document.getElementById('dayTabs');
-  el.innerHTML = DAYS.map(d => `
-    <div class="day-tab${activeDay===d.key?' active':''}" data-day="${d.key}">${d.label}<span class="cnt">(${dayCount(d.key)})</span></div>
+
+  let lastMonth = null;
+  const monthCells = DAYS.map((d, i) => {
+    if (d.month !== lastMonth) {
+      lastMonth = d.month;
+      const iso = `${d.year}-${String(d.month).padStart(2,'0')}-${String(d.date).padStart(2,'0')}`;
+      return `<div class="month-jump-wrap" style="grid-column:${i+2};grid-row:1;">
+        <span class="month-jump-label">${d.month}월</span>
+        <input type="date" class="month-jump-input" value="${iso}" data-day-key="${d.key}">
+      </div>`;
+    }
+    return '';
+  }).join('');
+
+  const dayCells = DAYS.map((d, i) => `
+    <div class="day-tab${activeDay===d.key?' active':''}" data-day="${d.key}" style="grid-column:${i+2};grid-row:2;">
+      <span class="day-tab-date">${d.month}/${d.date} ${WEEKDAY_LABELS[d.key]}</span>
+      <span class="cnt">${dayCount(d.key)}건</span>
+    </div>
   `).join('');
+
+  // 위/아래 두 줄을 하나의 grid로 통합 (컬럼 정의가 하나뿐이라 폭이 절대 안 어긋남).
+  // 1번 컬럼=좌측 버튼(오늘/이전주), 2~8번=요일 7칸, 9번=우측 버튼(다음주) — 좌우 버튼은 두 행에 걸쳐 표시(row-span).
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:92px repeat(7,1fr) 70px;grid-template-rows:auto auto;gap:4px 6px;align-items:stretch;width:100%;box-sizing:border-box;">
+      <div class="chip" id="todayBtn" style="grid-column:1;grid-row:1;text-align:center;border-radius:16px;">오늘</div>
+      <div class="chip" id="prevWeekBtn" style="grid-column:1;grid-row:2;text-align:center;border-radius:16px;">‹ 이전주</div>
+      ${monthCells}
+      ${dayCells}
+      <div class="chip" id="nextWeekBtn" style="grid-column:9;grid-row:2;text-align:center;border-radius:16px;">다음주 ›</div>
+      <div style="grid-column:9;grid-row:1;"></div>
+    </div>
+  `;
+
+  document.getElementById('todayBtn').addEventListener('click', () => loadWeekAt(new Date()));
+  document.getElementById('prevWeekBtn').addEventListener('click', () => loadWeek(-7));
+  document.getElementById('nextWeekBtn').addEventListener('click', () => loadWeek(7));
+  el.querySelectorAll('.month-jump-input').forEach(inp => {
+    inp.addEventListener('change', () => { if (inp.value) loadWeekForDate(inp.value); });
+  });
 }
 
 function groupByTime(shows, dayKey) {
@@ -327,6 +528,88 @@ function showRowHtml(s) {
   </div>`;
 }
 
+// ============================================================
+// 전체목록(상태별) 모드: period("2026.07.27 ~ 2026.08.02")를 오늘과 비교해서
+// 진행중 / 예정 / 종료로 분류. 못 읽으면 "기간 확인 필요"로 따로 모아서 안 사라지게 함.
+// ============================================================
+function parsePeriod(period) {
+  if (!period) return null;
+  const m = period.match(/(\d{4})\D(\d{1,2})\D(\d{1,2})\s*~\s*(\d{4})\D(\d{1,2})\D(\d{1,2})/);
+  if (!m) return null;
+  const start = new Date(+m[1], +m[2] - 1, +m[3]);
+  const end = new Date(+m[4], +m[5] - 1, +m[6]);
+  end.setHours(23, 59, 59, 999);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+  return { start, end };
+}
+
+function getShowStatus(s) {
+  const p = parsePeriod(s.period);
+  if (!p) return { key: 'unknown', label: '기간 확인 필요' };
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  if (today < p.start) return { key: 'upcoming', label: '예정' };
+  if (today > p.end) return { key: 'ended', label: '종료' };
+  return { key: 'ongoing', label: '진행중' };
+}
+
+function castSummaryHtml(s) {
+  if (s.realCast && s.realCast.length) {
+    return `<div class="cast-tags">${s.realCast.slice(0, 6).map(a => `<span class="cast-tag">${a.displayName || a.actor}</span>`).join('')}</div>`;
+  }
+  if (s.cast && s.cast.length) {
+    return `<div class="cast-tags">${s.cast.slice(0, 6).map(c => `<span class="cast-tag">${c}</span>`).join('')}</div>`;
+  }
+  return `<div class="cast-tags" style="color:var(--text-muted);font-size:11.5px;">출연진 정보 없음</div>`;
+}
+
+function allShowCardHtml(s) {
+  const status = getShowStatus(s);
+  const genreCls = s.genre === 'musical' ? 'musical' : 'play';
+  const genreLabel = s.genre === 'musical' ? '뮤지컬' : '연극';
+  const flag = s.daehakroFlag === 'N' ? `<span class="flag-badge">⚠</span>` : '';
+  const thumb = s.poster
+    ? `<img class="all-card-poster" src="${s.poster}" alt="${s.title} 포스터" onerror="this.style.display='none'">`
+    : `<div class="all-card-poster" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:11px;">포스터 없음</div>`;
+  return `
+  <div class="all-card" data-id="${s.id}">
+    ${thumb}
+    <div class="all-card-body">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px;">
+        <span class="genre-badge ${genreCls}">${genreLabel}</span>${flag}
+      </div>
+      <div class="show-title">${s.title}</div>
+      <div class="show-venue">${s.venue}${s.runtime ? ' · ' + s.runtime : ''}</div>
+      ${castSummaryHtml(s)}
+    </div>
+    <div class="all-card-status">
+      <span class="status-badge status-${status.key}">${status.label}</span>
+      <div class="all-card-period">${s.period || '기간 정보 없음'}</div>
+    </div>
+  </div>`;
+}
+
+function renderAllList(filtered) {
+  const groups = { ongoing: [], upcoming: [], ended: [], unknown: [] };
+  filtered.forEach(s => groups[getShowStatus(s).key].push(s));
+
+  groups.upcoming.sort((a, b) => (parsePeriod(a.period)?.start || 0) - (parsePeriod(b.period)?.start || 0));
+  groups.ended.sort((a, b) => (parsePeriod(b.period)?.end || 0) - (parsePeriod(a.period)?.end || 0));
+
+  const section = (title, list) => !list.length ? '' : `
+    <div class="time-block">
+      <div class="time-header"><span class="time">${title}</span><span class="count">${list.length}건</span></div>
+      <div class="show-list">${list.map(allShowCardHtml).join('')}</div>
+    </div>`;
+
+  const total = filtered.length;
+  if (!total) return emptyStateHtml();
+
+  return section('🟢 진행중', groups.ongoing)
+    + section('🔵 예정', groups.upcoming)
+    + section('⚪ 종료', groups.ended)
+    + section('❔ 기간 확인 필요', groups.unknown);
+}
+
 function emptyStateHtml() {
   let msg;
   if (activeTheme !== 'all') {
@@ -345,10 +628,26 @@ function render() {
   renderGenreChips();
   renderThemeChips();
   renderRegionChips();
-  renderTabs();
+  renderViewModeToggle();
 
   const main = document.getElementById('main');
   const filtered = SHOWS.filter(matchesFilters);
+
+  if (viewMode === 'all') {
+    // 전체목록(상태별) 모드: 요일 탭 대신 '오늘' 버튼만 남김
+    const dt = document.getElementById('dayTabs');
+    dt.innerHTML = `<div class="chip" id="todayOnlyBtn" style="border-radius:16px;">오늘</div>`;
+    document.getElementById('todayOnlyBtn').addEventListener('click', () => { viewMode = 'week'; loadWeekAt(new Date()); });
+
+    document.getElementById('resultCount').textContent = `이 조건에 해당하는 공연 ${filtered.length}건 (전체 ${SHOWS.length}건 중)`;
+    main.innerHTML = renderAllList(filtered);
+    main.querySelectorAll('.all-card').forEach(el => {
+      el.addEventListener('click', () => openDetail(el.dataset.id));
+    });
+    return;
+  }
+
+  renderTabs();
   const todays = filtered.filter(s => s.days && s.days[activeDay] && s.days[activeDay].length);
   const noDaysCount = filtered.filter(s => !s.days).length;
 
@@ -413,9 +712,16 @@ function avatarSmallHtml(rc) {
 function realCastHtml(realCast) {
   // 같은 배역을 여러 배우가 맡으면(멀티/더블/트리플 캐스팅) 한 role-block에 묶어서 보여주고,
   // 배우 한 명이 여러 배역을 겸하는 경우(예: 나잇나잇)는 각자 자기 배역 라벨을 달고 개별 표시함
+  //
+  // 2026-07-29: data-actor 키와 화면 표기를 rc.actor(실명)가 아니라 rc.displayName(동명이인이면
+  // "김한B"처럼 구분자 붙은 이름, 없으면 실명과 동일)로 바꿈. actor_cache의 §4-4 동명이인
+  // 판별 로직이 구분자를 만들어줘도 화면에서 실명만 보여주면 사용자는 구분을 못 보고,
+  // 한 공연 안에 우연히 동명이인 두 명이 같이 캐스팅된 경우 data-actor가 겹쳐서
+  // 배우 칩을 클릭해도 항상 첫 번째 사람 프로필만 열리는 버그도 있었음.
   const groups = [];
   realCast.forEach(rc => {
-    const roleKey = (rc.roles && rc.roles.length) ? rc.roles.join('|') : `__solo__${rc.actor}`;
+    const key = rc.displayName || rc.actor;
+    const roleKey = (rc.roles && rc.roles.length) ? rc.roles.join('|') : `__solo__${key}`;
     let g = groups.find(g => g.roleKey === roleKey);
     if (!g) { g = { roleKey, roles: rc.roles, items: [] }; groups.push(g); }
     g.items.push(rc);
@@ -425,10 +731,10 @@ function realCastHtml(realCast) {
       ${(g.roles && g.roles.length && g.items.length > 1) ? `<div class="role-name">${g.roles.join(', ')} 역 <span style="font-weight:500;color:#999;">(멀티캐스팅 ${g.items.length}명)</span></div>` : ''}
       <div class="actor-chips">
         ${g.items.map(rc => `
-          <div class="actor-chip" data-actor="${rc.actor}">
+          <div class="actor-chip" data-actor="${rc.displayName || rc.actor}">
             ${avatarSmallHtml(rc)}
             <div>
-              <span class="actor-name">${rc.actor}</span>
+              <span class="actor-name">${rc.displayName || rc.actor}</span>
               ${(g.items.length === 1 && rc.roles && rc.roles.length) ? `<span class="actor-role-label">${rc.roles.join(', ')} 역</span>` : ''}
             </div>
           </div>
@@ -442,16 +748,19 @@ function openDetail(id) {
   currentShowId = id;
   const s = findShow(id);
   const sourceClass = s.priceSource.status === 'ok' ? 'ok' : (s.priceSource.status === 'miss' ? 'miss' : '');
+  // 과거 주(최신 주가 아님) 데이터는 KOPIS API 원본 정보만 표시 — 배우사진 추정/할인비교/전작 등
+  // Claude가 보강한 항목은 전부 숨김 (§3: 검증 안 된 걸 과거 기록에 남기지 않음)
+  const isPast = s.week_label && LATEST_WEEK_LABEL && s.week_label !== LATEST_WEEK_LABEL;
 
   const posterHtml = s.poster ? `<div class="detail-poster"><img src="${s.poster}" alt="${s.title} 포스터" onerror="this.outerHTML='<div style=&quot;color:#999;font-size:12px;text-align:center;padding:12px;&quot;>⚠ 포스터 이미지를 불러오지 못했습니다 (네트워크에서 KOPIS 이미지 서버 접속이 막혔을 수 있습니다)<br><a href=&quot;${s.poster}&quot; target=&quot;_blank&quot; style=&quot;color:var(--accent);&quot;>원본 이미지 링크 열기</a></div>'"></div>` : '';
 
-  const flagBlock = s.flagIssue ? `
+  const flagBlock = (!isPast && s.flagIssue) ? `
     <div class="detail-section">
       <div class="warn-banner" style="margin:0;">⚠ ${s.flagIssue}</div>
     </div>` : '';
 
   const basePrice = basePriceOf(s);
-  const discountBlock = s.vendorComparison ? `
+  const discountBlock = (!isPast && s.vendorComparison) ? `
     <div class="detail-section">
       <div class="detail-label">할인 정보 — 예매처별 비교 <span class="source-tag ok">${s.vendorComparison.checked.length}개 사이트에서 확인됨</span></div>
       ${s.vendorComparison.checked.map(v => `
@@ -466,18 +775,19 @@ function openDetail(id) {
       `).join('')}
       <div class="warn-banner" style="margin-top:8px;">⚠ ${s.vendorComparison.note}</div>
     </div>
-  ` : (s.discounts.length ? `
+  ` : ((!isPast && s.discounts.length) ? `
     <div class="detail-section">
       <div class="detail-label">할인 정보 <span class="source-tag ${sourceClass}">${s.priceSource.site} 조회</span></div>
       <ul class="discount-list">${s.discounts.map(d => discountLineHtml(d, basePrice)).join('')}</ul>
     </div>` : `
     <div class="detail-section">
-      <div class="detail-label">할인 정보 <span class="source-tag">${s.priceSource.site} 조회</span></div>
-      <div class="detail-value" style="color:var(--text-muted);font-size:13px;">현재 진행 중인 할인 프로모션을 찾지 못했습니다.</div>
+      <div class="detail-label">할인 정보 <span class="source-tag">KOPIS 조회</span></div>
+      <div class="detail-value" style="color:var(--text-muted);font-size:13px;">${isPast ? '지난 주 데이터는 KOPIS 원본 정보만 표시합니다.' : '현재 진행 중인 할인 프로모션을 찾지 못했습니다.'}</div>
     </div>`);
 
-  // 캐스트 섹션: Colab이 채운 realCast(사진 후보)가 있으면 그걸 우선 사용, 없으면 KOPIS flat 목록으로 대체
-  const hasCast = s.realCast && s.realCast.length > 0;
+  // 캐스트 섹션: Colab이 채운 realCast(사진 후보)가 있으면 그걸 우선 사용, 없으면 KOPIS flat 목록으로 대체.
+  // 과거 주는 realCast(네이버 추정 사진 등 보강 데이터)를 아예 안 쓰고 KOPIS 원문 캐스트만 노출.
+  const hasCast = !isPast && s.realCast && s.realCast.length > 0;
   const hasRoles = hasCast && s.realCast.some(rc => rc.roles && rc.roles.length);
   const hasProfileLinks = hasCast && s.realCast.some(rc => rc.profileUrl);
   const verifiedCount = hasCast ? s.realCast.filter(rc => rc.photo_verified).length : 0;
@@ -490,8 +800,8 @@ function openDetail(id) {
         <div class="detail-label">${hasRoles ? '출연진 (배역별)' : '출연진 (사진 후보)'} <span class="source-tag ${verifiedCount===s.realCast.length?'ok':''}">${castSourceLabel}</span></div>
         ${realCastHtml(s.realCast)}
         <div class="waterfall-note">${castNoteText}</div>
-        ${s.castChangeNotice ? `<div class="warn-banner" style="margin-top:10px;">📢 ${s.castChangeNotice}</div>` : ''}
-        ${s.castMismatchNote ? `<div class="warn-banner" style="margin-top:10px;">⚠ ${s.castMismatchNote}</div>` : ''}
+        ${(!isPast && s.castChangeNotice) ? `<div class="warn-banner" style="margin-top:10px;">📢 ${s.castChangeNotice}</div>` : ''}
+        ${(!isPast && s.castMismatchNote) ? `<div class="warn-banner" style="margin-top:10px;">⚠ ${s.castMismatchNote}</div>` : ''}
       </div>
   ` : `
       <div class="detail-section" style="margin-top:18px;">
@@ -519,11 +829,11 @@ function openDetail(id) {
       <div class="detail-section">
         <div class="detail-label">제작진 <span class="source-tag ok">KOPIS 기본정보</span></div>
         <dl class="credit-grid">
-          <dt>제작사</dt><dd>${s.companyPrevWorks ? `<span class="credit-clickable" data-company="1">${s.company}</span>` : s.company}</dd>
-          <dt>스태프</dt><dd>${s.crew.map(name => (s.crewInfo && s.crewInfo[name]) ? `<span class="credit-clickable" data-crew="${name}">${name}</span>` : name).join(', ')}</dd>
+          <dt>제작사</dt><dd>${(!isPast && s.companyPrevWorks) ? `<span class="credit-clickable" data-company="1">${s.company}</span>` : s.company}</dd>
+          <dt>스태프</dt><dd>${s.crew.map(name => (!isPast && s.crewInfo && s.crewInfo[name]) ? `<span class="credit-clickable" data-crew="${name}">${name}</span>` : name).join(', ')}</dd>
         </dl>
-        <div class="waterfall-note">※ KOPIS의 prfcrew 필드는 작가/연출 구분 없이 이름만 나열되어 있어, 이번 표본에서는 역할 구분 없이 통째로 표시했습니다. ${s.companyPrevWorks ? '제작사 이름을 클릭하면 이 회사의 다른 작품을 볼 수 있고, ' : ''}${s.crewInfo ? '밑줄 있는 스태프 이름을 클릭하면 전작이 확인된 경우에 한해 정보가 보입니다.' : ''}</div>
-        ${s.crewNote ? `<div class="warn-banner" style="margin-top:10px;">⚠ ${s.crewNote}</div>` : ''}
+        <div class="waterfall-note">※ KOPIS의 prfcrew 필드는 작가/연출 구분 없이 이름만 나열되어 있어, 이번 표본에서는 역할 구분 없이 통째로 표시했습니다. ${(!isPast && s.companyPrevWorks) ? '제작사 이름을 클릭하면 이 회사의 다른 작품을 볼 수 있고, ' : ''}${(!isPast && s.crewInfo) ? '밑줄 있는 스태프 이름을 클릭하면 전작이 확인된 경우에 한해 정보가 보입니다.' : ''}</div>
+        ${(!isPast && s.crewNote) ? `<div class="warn-banner" style="margin-top:10px;">⚠ ${s.crewNote}</div>` : ''}
       </div>
       <div class="detail-section">
         <div class="detail-label">가격 <span class="source-tag ok">KOPIS 기본정보</span></div>
@@ -541,7 +851,7 @@ function openDetail(id) {
   if (s.realCast) {
     document.querySelectorAll('.actor-chip').forEach(el => {
       el.addEventListener('click', () => {
-        const rc = s.realCast.find(r => r.actor === el.dataset.actor);
+        const rc = s.realCast.find(r => (r.displayName || r.actor) === el.dataset.actor);
         openActorProfile(rc);
       });
     });
@@ -619,14 +929,24 @@ function openActorProfile(rc) {
       <div class="actor-profile-header">
         ${avatarLgHtml}
         <div>
-          <div class="actor-profile-name">${rc.actor}</div>
+          <div class="actor-profile-name">${rc.displayName || rc.actor}</div>
           ${rc.roles && rc.roles.length ? `<div class="actor-profile-role">이번 공연 배역: ${rc.roles.join(', ')}</div>` : ''}
         </div>
       </div>
       ${metaSection}
       ${worksSection}
       ${rc.profileUrl ? `<a class="external-link-pill" href="${rc.profileUrl}" target="_blank" rel="noopener">예매처에서 배우 프로필 전체 보기 →</a>` : ''}
-      ${!rc.profileUrl ? '<div class="waterfall-note">이 배우는 예매처 페이지에 실제 사진은 있었지만, 별도 프로필 페이지(고유 URL)는 없어 사진·이름만 확보했습니다.</div>' : (!rc.works ? '<div class="waterfall-note">이 배우는 이번 표본에서 프로필 상세까지는 확인하지 않았고, 캐스팅 섹션의 실제 클릭 링크(위 버튼)만 확보했습니다.</div>' : '')}
+      ${rc.profileUrl ? '' : (
+        // 2026-07-29: "확인했지만 없음"과 "아직 확인 안 함"을 구분 없이 같은 문구로 뭉뚱그리던 걸 수정.
+        // Colab은 개별 프로필 페이지를 아예 방문하지 않으므로(§6, asyncio 문제로 제거됨) profileUrl은
+        // 항상 null로 나오는데, 예전 문구는 "확인했지만 별도 페이지가 없었다"처럼 실제로 확인한 것처럼
+        // 읽혀서 §3 원칙(확인 안 된 걸 확인된 것처럼 표시 금지)에 어긋났음. Claude가 §2-1대로 직접 방문해서
+        // "확인했는데 정말 없더라"까지 확정한 경우에만 profileChecked:true를 붙이도록 하고, 그 외(=Colab
+        // 자동수집 그대로거나 아직 아무도 안 본 경우)는 기본값으로 "아직 확인 안 됨"을 정직하게 표시.
+        rc.profileChecked
+          ? '<div class="waterfall-note">이 배우는 예매처 페이지에 실제 사진은 있었지만, 별도 프로필 페이지(고유 URL)는 없는 것으로 확인했습니다.</div>'
+          : '<div class="waterfall-note">이 배우의 예매처 프로필 페이지(전작 포함)는 아직 확인되지 않았습니다 — 지금 사진은 KOPIS/네이버 후보 검색으로만 확보된 상태입니다.</div>'
+      )}
     </div>
   `;
   document.getElementById('backToShow').addEventListener('click', () => openDetail(currentShowId));
@@ -640,6 +960,14 @@ function closeDetail() {
 document.getElementById('genreChips').addEventListener('click', e => {
   const chip = e.target.closest('.chip'); if (!chip) return;
   activeGenre = chip.dataset.genre; render();
+});
+document.getElementById('searchBox').addEventListener('input', e => {
+  searchQuery = e.target.value.trim().toLowerCase();
+  render();
+});
+document.getElementById('viewModeToggle').addEventListener('click', e => {
+  const chip = e.target.closest('.chip'); if (!chip) return;
+  viewMode = chip.dataset.mode; render();
 });
 document.getElementById('themeChips').addEventListener('click', e => {
   const chip = e.target.closest('.chip'); if (!chip) return;
@@ -661,12 +989,17 @@ document.getElementById('dayTabs').addEventListener('click', e => {
 document.getElementById('waterfallSummary').innerHTML = waterfallSummaryHtml();
 
 // ============================================================
-// 데이터 fetch: GitHub JSON을 불러온 뒤에야 요일/필터/화면을 초기화
+// 요일 탭/칩 UI는 데이터 없이도 먼저 그린다 (0건 상태로) -> fetch가 늦거나 실패해도
+// 화면 레이아웃 자체는 항상 보임. 데이터가 오면 같은 화면을 다시 그릴 뿐.
 // ============================================================
-document.getElementById('main').innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:60px 20px;">공연 데이터를 불러오는 중...</div>';
+WEEK_START = guessWeekStart(SHOWS);
+DAYS = buildDays(WEEK_START);
+activeDay = todayKeyWithin(WEEK_START);
+document.querySelector('.sub-title').innerHTML =
+  `${DAYS[0].label} ~ ${DAYS[6].label} · <span id="waterfallSummary">${waterfallSummaryHtml()}</span>`;
+render();
 
-fetch(JSON_URL)
-  .then(res => { if (!res.ok) throw new Error('JSON 로드 실패: ' + res.status); return res.json(); })
+fetchJsonWithFallback('/data/real_test_week_latest.json')
   .then(shows => {
     shows.forEach(s => {
       if (s.poster && !s.poster.startsWith('http')) s.poster = RAW_BASE + '/' + s.poster;
@@ -676,6 +1009,8 @@ fetch(JSON_URL)
     });
     SHOWS = shows;
     WEEK_START = guessWeekStart(shows);
+    LATEST_WEEK_LABEL = (shows.find(s => s.week_label) || {}).week_label || fmtDate(WEEK_START);
+    CURRENT_WEEK_LABEL = LATEST_WEEK_LABEL;
     DAYS = buildDays(WEEK_START);
     activeDay = todayKeyWithin(WEEK_START);
     document.querySelector('.sub-title').innerHTML =
@@ -683,6 +1018,7 @@ fetch(JSON_URL)
     render();
   })
   .catch(err => {
+    console.error('GitHub JSON fetch 실패:', err.message);
     document.getElementById('main').innerHTML =
       `<div style="text-align:center;color:#c62828;padding:60px 20px;">데이터를 불러오지 못했습니다: ${err.message}<br><br>GITHUB_OWNER/REPO 설정과 data/real_test_week_latest.json 경로를 확인하세요.</div>`;
   });
